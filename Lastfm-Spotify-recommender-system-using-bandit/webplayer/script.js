@@ -906,9 +906,34 @@ document.addEventListener('DOMContentLoaded', () => {
     const appContent = document.getElementById('app-content');
     const spotifyLoginSection = document.getElementById('spotify-login-section');
 
+    // 강제로 초기 상태 설정 - 사용자 선택 화면만 표시
+    console.log('Forcing user type selection screen');
+    
+    // 모든 섹션 숨기기
+    if (appContent) {
+        appContent.classList.add('d-none');
+        console.log('App content hidden');
+    }
+    if (spotifyLoginSection) {
+        spotifyLoginSection.classList.add('d-none');
+        console.log('Login section hidden');
+    }
+    
+    // 사용자 선택 화면만 표시
+    if (userTypeSelection) {
+        userTypeSelection.classList.remove('d-none');
+        console.log('User type selection shown');
+    }
+    
+    // 기본 변수 초기화
+    isPremiumUser = false;
+    accessToken = null;
+    localStorage.removeItem('spotify_access_token'); // 기존 토큰 제거
+
     // Handle user type selection
     if (premiumUserBtn) {
         premiumUserBtn.addEventListener('click', () => {
+            console.log('Premium User button clicked');
             isPremiumUser = true;
             userTypeSelection.classList.add('d-none');
             appContent.classList.remove('d-none');
@@ -919,12 +944,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (generalUserBtn) {
         generalUserBtn.addEventListener('click', () => {
+            console.log('General User button clicked');
             isPremiumUser = false;
             userTypeSelection.classList.add('d-none');
             appContent.classList.remove('d-none');
             spotifyLoginSection.classList.add('d-none');
             togglePlayerControls(true); // Enable basic controls for preview playback
-            console.log('General User mode selected');
+            console.log('General User mode activated');
         });
     }
 
@@ -1007,16 +1033,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Initial display state: Show user type selection
-    if (appContent) appContent.classList.add('d-none');
-    if (userTypeSelection) userTypeSelection.classList.remove('d-none'); // 사용자 선택 화면 표시
     if (recommendationSection) recommendationSection.classList.remove('d-none');
     if (playlistsSection) playlistsSection.classList.add('d-none');
     if (showRecommendationsBtn) showRecommendationsBtn.classList.add('active');
     if (showPlaylistsBtn) showPlaylistsBtn.classList.remove('active');
 
-    // 자동으로 사용자 타입 확인하지 않음 - 사용자가 직접 선택할 때까지 대기
-    // fetchAndSetUserType(); // 이 라인 제거
+    console.log('Initial setup complete - waiting for user selection');
 
     // Form submission
     if (form) {
