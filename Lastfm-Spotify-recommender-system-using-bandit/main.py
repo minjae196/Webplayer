@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -59,11 +59,16 @@ class FeedbackRequest(BaseModel):
     rating: float # 0.0 for skip/dislike, 0.1-1.0 for like/rating
     seed_track_name: str # Original seed track name
     seed_artist_name: str # Original seed artist name
+    track_info: dict = None # Full track information
 
 class RecommendOneRequest(BaseModel):
     seed_track_name: str
     seed_artist_name: str
     exclude_ids: list[str] = [] # New field to exclude already displayed track IDs
+
+class DeleteTrackRequest(BaseModel):
+    playlist_id: str
+    track_id: str
 
 # Global dictionary to store user playlists based on feedback
 # This will be reset on server restart. For persistence, a database would be needed.
@@ -246,41 +251,36 @@ def post_feedback(request: FeedbackRequest):
         raise HTTPException(status_code=503, detail="Recommender system is not initialized.")
     
     try:
-        # The track_id from frontend is Spotify ID, but bandit uses Last.fm format
-        # We need to convert it back or ensure consistency.
-        # For simplicity, let's assume track_id from frontend is already in the format
-        # "Track Name - Artist Name" which is what the bandit expects.
-        # If not, a lookup would be needed here.
-        
-        # For the purpose of demonstrating feedback, we'll use the Spotify ID directly
-        # as the item_id for the bandit. This means the bandit will learn based on Spotify IDs.
-        # If you want the bandit to learn on Last.fm track names, you'd need to pass that.
-        
         # Convert rating (0-5) to a reward (0.0-1.0)
-        # 0: 0.0 (skip/dislike)
-        # 1-5: 0.2-1.0 (linear scale)
         reward = request.rating / 5.0 if request.rating > 0 else 0.0
         
         recommender.give_feedback(request.track_id, reward)
         print(f"[Backend] Received feedback for {request.track_id} with rating {request.rating} (reward: {reward})")
 
-        # Store in user_playlists
-        # Find the track in the current recommendations to get its full info
-        # This assumes the track_id is unique enough to identify the track
-        # In a real app, you'd fetch the track details from Spotify or a database
-        # For simplicity, we'll just store the provided info and seed info
-        track_info = {
-            "id": request.track_id,
-            "rating": request.rating,
-            "seed_track_name": request.seed_track_name,
-            "seed_artist_name": request.seed_artist_name
-        }
-        # Ensure the rating is an integer key for the dictionary
+        # Store in user_playlists with full track information
         rating_key = str(int(request.rating))
         if rating_key not in user_playlists:
             user_playlists[rating_key] = []
-        user_playlists[rating_key].append(track_info)
-        print(f"[Backend] Stored track {request.track_id} in playlist {rating_key}")
+        
+        # Use track_info if provided, otherwise create basic info
+        if request.track_info:
+            track_info = request.track_info
+            track_info["rating"] = request.rating
+        else:
+            track_info = {
+                "id": request.track_id,
+                "name": "Unknown Track",
+                "artist": "Unknown Artist", 
+                "album_cover_url": "https://via.placeholder.com/60x60?text=♪",
+                "rating": request.rating,
+                "seed_track_name": request.seed_track_name,
+                "seed_artist_name": request.seed_artist_name
+            }
+        
+        # Prevent duplicate tracks in playlist
+        if not any(t.get("id") == request.track_id for t in user_playlists[rating_key]):
+            user_playlists[rating_key].append(track_info)
+            print(f"[Backend] Stored track {request.track_id} in playlist {rating_key}")
 
         return {"message": "Feedback received and bandit updated."}
     except Exception as e:
@@ -358,6 +358,21 @@ def get_playlists():
     """
     return user_playlists
 
+@app.post("/remove_local_playlist_track")
+async def remove_local_playlist_track(delete_request: DeleteTrackRequest):
+    playlist_id = delete_request.playlist_id
+    track_id = delete_request.track_id
+
+    if playlist_id not in user_playlists:
+        return JSONResponse(status_code=404, content={"detail": "Playlist not found."})
+
+    initial_len = len(user_playlists[playlist_id])
+    user_playlists[playlist_id] = [track for track in user_playlists[playlist_id] if track.get("id") != track_id]
+
+    if len(user_playlists[playlist_id]) < initial_len:
+        return JSONResponse(content={"message": "Track removed successfully from local playlist."})
+    else:
+        return JSONResponse(status_code=404, content={"detail": "Track not found in local playlist."})
 
 # This is the entry point for running the FastAPI application with Uvicorn.
 # To run this application, you would typically use: uvicorn main:app --reload
