@@ -875,7 +875,63 @@ async function removeFromPlaylist(playlistId, trackId) {
     }
 }
 
+// 사용자 선택 강제 함수
+function forceUserSelection() {
+    console.log('=== FORCING USER SELECTION ===');
+    
+    // 모든 상태 리셋
+    isPremiumUser = false;
+    accessToken = null;
+    currentPlaylist = [];
+    currentPlaylistIndex = -1;
+    currentPlaylistId = null;
+    
+    // 모든 저장소 클리어
+    localStorage.clear();
+    sessionStorage.clear();
+    
+    // UI 리셋
+    const userTypeSelection = document.getElementById('user-type-selection');
+    const appContent = document.getElementById('app-content');
+    const spotifyLoginSection = document.getElementById('spotify-login-section');
+    
+    // 앱 콘텐츠 숨기기
+    if (appContent) {
+        appContent.classList.add('d-none');
+        appContent.style.display = 'none';
+    }
+    
+    // 로그인 섹션 숨기기
+    if (spotifyLoginSection) {
+        spotifyLoginSection.classList.add('d-none');
+        spotifyLoginSection.style.display = 'none';
+    }
+    
+    // 사용자 선택 화면 표시
+    if (userTypeSelection) {
+        userTypeSelection.classList.remove('d-none');
+        userTypeSelection.style.display = 'block';
+        userTypeSelection.style.visibility = 'visible';
+    }
+    
+    console.log('User selection forced - ready for selection');
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+    // 페이지 로드 시 항상 초기 상태로 리셋
+    console.log('=== PAGE LOADED - FORCING USER SELECTION ===');
+    
+    // 모든 저장된 상태 제거
+    localStorage.clear();
+    sessionStorage.clear();
+    
+    // 전역 변수 초기화
+    isPremiumUser = false;
+    accessToken = null;
+    currentPlaylist = [];
+    currentPlaylistIndex = -1;
+    currentPlaylistId = null;
+    
     // Assign global player element variables
     spotifyPlayerBar = document.getElementById('mini-player-bar');
     togglePlayButton = document.getElementById('mini-player-toggle-play');
@@ -906,37 +962,44 @@ document.addEventListener('DOMContentLoaded', () => {
     const appContent = document.getElementById('app-content');
     const spotifyLoginSection = document.getElementById('spotify-login-section');
 
-    // 강제로 초기 상태 설정 - 사용자 선택 화면만 표시
-    console.log('Forcing user type selection screen');
+    // 강제로 사용자 선택 화면만 표시
+    console.log('Forcing user type selection screen...');
     
-    // 모든 섹션 숨기기
+    // 앱 콘텐츠 완전히 숨기기
     if (appContent) {
         appContent.classList.add('d-none');
-        console.log('App content hidden');
+        appContent.style.display = 'none';
     }
+    
+    // 로그인 섹션 숨기기
     if (spotifyLoginSection) {
         spotifyLoginSection.classList.add('d-none');
-        console.log('Login section hidden');
+        spotifyLoginSection.style.display = 'none';
     }
     
-    // 사용자 선택 화면만 표시
+    // 사용자 선택 화면 강제 표시
     if (userTypeSelection) {
         userTypeSelection.classList.remove('d-none');
-        console.log('User type selection shown');
+        userTypeSelection.style.display = 'block';
+        userTypeSelection.style.visibility = 'visible';
     }
     
-    // 기본 변수 초기화
-    isPremiumUser = false;
-    accessToken = null;
-    localStorage.removeItem('spotify_access_token'); // 기존 토큰 제거
+    console.log('User selection screen is now visible');
 
     // Handle user type selection
     if (premiumUserBtn) {
         premiumUserBtn.addEventListener('click', () => {
-            console.log('Premium User button clicked');
+            console.log('=== PREMIUM USER SELECTED ===');
             isPremiumUser = true;
+            
+            // 사용자 선택 화면 숨기기
             userTypeSelection.classList.add('d-none');
+            userTypeSelection.style.display = 'none';
+            
+            // 앱 콘텐츠 표시
             appContent.classList.remove('d-none');
+            appContent.style.display = 'block';
+            
             // Premium 사용자는 Spotify 토큰 확인 시도
             fetchAndSetUserType();
         });
@@ -944,13 +1007,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (generalUserBtn) {
         generalUserBtn.addEventListener('click', () => {
-            console.log('General User button clicked');
+            console.log('=== GENERAL USER SELECTED ===');
             isPremiumUser = false;
+            
+            // 사용자 선택 화면 숨기기
             userTypeSelection.classList.add('d-none');
+            userTypeSelection.style.display = 'none';
+            
+            // 앱 콘텐츠 표시
             appContent.classList.remove('d-none');
+            appContent.style.display = 'block';
+            
+            // 로그인 섹션 숨기기
             spotifyLoginSection.classList.add('d-none');
-            togglePlayerControls(true); // Enable basic controls for preview playback
-            console.log('General User mode activated');
+            spotifyLoginSection.style.display = 'none';
+            
+            // 기본 컨트롤 활성화
+            togglePlayerControls(true);
+            console.log('General User mode activated - ready for preview playback');
         });
     }
 
@@ -1037,8 +1111,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (playlistsSection) playlistsSection.classList.add('d-none');
     if (showRecommendationsBtn) showRecommendationsBtn.classList.add('active');
     if (showPlaylistsBtn) showPlaylistsBtn.classList.remove('active');
-
-    console.log('Initial setup complete - waiting for user selection');
 
     // Form submission
     if (form) {
