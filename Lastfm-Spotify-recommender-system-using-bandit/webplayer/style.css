@@ -1,0 +1,179 @@
+body {
+    background-color: #0a0a0a; /* Even darker background */
+    color: #ffffff;
+}
+
+.container {
+    max-width: 960px;
+}
+
+.form-control {
+    background-color: #282828;
+    color: #ffffff;
+    border-color: #404040;
+}
+
+.form-control::placeholder {
+    color: #a0a0a0;
+}
+
+.form-control:focus {
+    background-color: #282828;
+    color: #ffffff;
+    border-color: #1db954;
+    box-shadow: 0 0 0 0.25rem rgba(29, 185, 84, 0.25);
+}
+
+.btn-primary {
+    background-color: #1db954;
+    border-color: #1db954;
+}
+
+.btn-primary:hover, .btn-primary:focus {
+    background-color: #1ed760;
+    border-color: #1ed760;
+}
+
+.card {
+    background-color: #181818;
+    border: 1px solid #282828;
+    transition: transform .2s ease-in-out, box-shadow .2s ease-in-out;
+}
+
+.card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.card-title {
+    color: #ffffff;
+}
+
+.card-text {
+    color: #b3b3b3;
+}
+
+.alert-danger {
+    background-color: #d9534f;
+    color: #ffffff;
+}
+
+.mini-player-bar {
+    position: fixed;
+    bottom: 20px;
+    right: 20px; /* Changed to right for mini player */
+    width: 320px; /* Compact width */
+    background-color: #282828; /* Darker background */
+    padding: 15px;
+    border-radius: 15px; /* More rounded corners */
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.7); /* Stronger shadow */
+    z-index: 1000;
+    transition: background-color 0.5s ease; /* Smooth transition for dynamic background */
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.mini-player-bar .btn-close-white {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    opacity: 0.7;
+    transition: opacity 0.3s ease;
+}
+
+.mini-player-bar .btn-close-white:hover {
+    opacity: 1;
+}
+
+.mini-player-bar #mini-player-album-art {
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+}
+
+.mini-player-bar #mini-player-track-name {
+    font-size: 1rem;
+    flex-shrink: 1; /* Allow text to shrink */
+}
+
+.mini-player-bar #mini-player-artist-name {
+    font-size: 0.8rem;
+    color: #b3b3b3 !important;
+    flex-shrink: 1; /* Allow text to shrink */
+}
+
+.mini-player-bar .d-flex.align-items-center > div.flex-grow-1 {
+    min-width: 0; /* Allow content to shrink */
+}
+
+.mini-player-bar .d-flex.align-items-center > div.d-flex {
+    flex-shrink: 0; /* Prevent buttons from shrinking */
+}
+
+.mini-player-bar .form-range::-webkit-slider-runnable-track {
+    background: #404040;
+    border-radius: 5px;
+    height: 5px;
+}
+
+.mini-player-bar .form-range::-moz-range-track {
+    background: #404040;
+    border-radius: 5px;
+    height: 5px;
+}
+
+.mini-player-bar .form-range::-webkit-slider-thumb {
+    background: #1db954;
+    border: none;
+    border-radius: 50%;
+    width: 15px;
+    height: 15px;
+    margin-top: -5px;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
+}
+
+.mini-player-bar .form-range::-moz-range-thumb {
+    background: #1db954;
+    border: none;
+    border-radius: 50%;
+    width: 15px;
+    height: 15px;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
+}
+
+.mini-player-bar #mini-player-seek-slider::-webkit-slider-runnable-track {
+    background: linear-gradient(to right, #1db954 var(--seek-progress, 0%), #404040 var(--seek-progress, 0%));
+}
+
+.mini-player-bar #mini-player-seek-slider::-moz-range-track {
+    background: linear-gradient(to right, #1db954 var(--seek-progress, 0%), #404040 var(--seek-progress, 0%));
+}
+
+.mini-player-bar #mini-player-volume-slider::-webkit-slider-runnable-track {
+    background: linear-gradient(to right, #1db954 var(--volume-progress, 0%), #404040 var(--volume-progress, 0%));
+}
+
+.mini-player-bar #mini-player-volume-slider::-moz-range-track {
+    background: linear-gradient(to right, #1db954 var(--volume-progress, 0%), #404040 var(--volume-progress, 0%));
+}
+
+.mini-player-bar .bi-volume-down-fill, .mini-player-bar .bi-volume-up-fill {
+    font-size: 1.1rem;
+}
+
+.mini-player-bar .btn-outline-light {
+    border-width: 1px;
+    padding: 0.3rem 0.6rem;
+    font-size: 0.8rem;
+}
+
+.mini-player-bar .btn-outline-light i {
+    font-size: 1rem;
+}
+
+/* Remove old player bar styles */
+#spotify-player-container,
+.fixed-bottom-left {
+    display: none !important;
+}
+

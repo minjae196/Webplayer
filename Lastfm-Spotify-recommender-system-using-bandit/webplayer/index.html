@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Music Recommender</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            display: flex;
+            min-height: 100vh;
+            background-color: #121212; /* Dark background for Spotify feel */
+            color: #ffffff;
+        }
+        #sidebar {
+            width: 250px;
+            background-color: #000000; /* Black sidebar */
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            border-right: 1px solid #282828;
+        }
+        #sidebar .nav-link {
+            color: #b3b3b3;
+            font-weight: bold;
+            padding: 10px 15px;
+            width: 100%;
+            text-align: left;
+            border-radius: 5px;
+            margin-bottom: 5px;
+        }
+        #sidebar .nav-link:hover,
+        #sidebar .nav-link.active {
+            color: #ffffff;
+            background-color: #282828;
+        }
+        #main-content {
+            flex-grow: 1;
+            padding: 20px;
+            overflow-y: auto;
+            padding-bottom: 100px; /* Add padding to account for the fixed player bar */
+        }
+        .card {
+            background-color: #282828; /* Darker card background */
+            color: #ffffff;
+            border: none;
+            transition: transform 0.2s ease-in-out;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+        }
+        .card-title {
+            color: #ffffff;
+        }
+        .card-text {
+            color: #b3b3b3;
+        }
+        .mini-player-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            width: 100vw; /* Ensure it spans the full viewport width */
+            background-color: #282828; /* Default dark background */
+            padding: 10px 20px; /* Adjusted padding */
+            display: flex;
+            flex-direction: row; /* Changed to row for horizontal layout */
+            justify-content: space-between; /* Distribute items */
+            align-items: center;
+            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            height: 80px; /* Fixed height for the player bar */
+        }
+        .mini-player-bar > div {
+            display: flex;
+            align-items: center;
+        }
+        .mini-player-bar .d-flex:nth-child(1) {
+            flex-grow: 1; /* Allow first flex container to grow */
+        }
+        .mini-player-bar .d-flex:nth-child(2) {
+            width: 30%; /* Adjust width for seek bar */
+            margin: 0 20px; /* Add horizontal margin */
+        }
+        .mini-player-bar .d-flex:nth-child(3) {
+            width: 15%; /* Adjust width for volume bar */
+        }
+        .mini-player-close-btn {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        .mini-player-bar .form-range::-webkit-slider-thumb {
+            background-color: #1DB954; /* Spotify green */
+        }
+        .mini-player-bar .form-range::-moz-range-thumb {
+            background-color: #1DB954; /* Spotify green */
+        }
+        .btn-outline-light {
+            color: #ffffff;
+            border-color: #ffffff;
+        }
+        .btn-outline-light:hover {
+            background-color: #ffffff;
+            color: #000000;
+        }
+        .btn-success {
+            background-color: #1DB954;
+            border-color: #1DB954;
+        }
+        .btn-success:hover {
+            background-color: #1ed760;
+            border-color: #1ed760;
+        }
+        .btn-primary {
+            background-color: #5a219e;
+            border-color: #5a219e;
+        }
+        .btn-primary:hover {
+            background-color: #6f32b8;
+            border-color: #6f32b8;
+        }
+        .btn-warning {
+            background-color: #ffc107;
+            border-color: #ffc107;
+            color: #000000;
+        }
+        .btn-warning:hover {
+            background-color: #e0a800;
+            border-color: #e0a800;
+        }
+        .feedback-btn {
+            background-color: #1DB954;
+            border-color: #1DB954;
+            color: #ffffff;
+        }
+        .feedback-btn:hover {
+            background-color: #1ed760;
+            border-color: #1ed760;
+        }
+        .feedback-btn:active {
+            background-color: #178B40;
+            border-color: #178B40;
+        }
+        .btn-group .btn-outline-success {
+            color: #ffffff;
+            border-color: #1DB954;
+        }
+        .btn-group .btn-outline-success:hover {
+            background-color: #1DB954;
+            color: #ffffff;
+        }
+        .btn-group .btn-outline-success:active {
+            background-color: #178B40;
+            border-color: #178B40;
+        }
+        .nav-tabs .nav-link {
+            color: #b3b3b3;
+        }
+        .nav-tabs .nav-link.active {
+            color: #ffffff;
+            background-color: #282828;
+            border-color: #282828;
+        }
+        .tab-pane {
+            padding: 15px;
+            background-color: #282828;
+            border-radius: 0 0 8px 8px;
+        }
+    </style>
+</head>
+<body>
+    <div id="sidebar">
+        <h3 class="text-white mb-4">Music Recommender</h3>
+        <nav class="nav flex-column w-100">
+            <a class="nav-link active" href="#" id="show-recommendations">Recommendations</a>
+            <a class="nav-link" href="#" id="show-playlists">Playlists</a>
+        </nav>
+    </div>
+
+    <div id="main-content" class="container-fluid">
+        <header class="text-center mb-5">
+            <h1 class="display-4">🎵 Music Recommender</h1>
+            <p class="lead">Enter a song and artist to get similar recommendations.</p>
+        </header>
+
+        <!-- User Type Selection Section -->
+        <div id="user-type-selection" class="text-center mb-4">
+            <p class="lead">How would you like to use the app?</p>
+            <button id="premium-user-btn" class="btn btn-success btn-lg me-3">Premium Spotify User (Full Playback)</button>
+            <button id="general-user-btn" class="btn btn-info btn-lg">General User (Playlist Export Only)</button>
+        </div>
+
+        <!-- Main Application Content (initially hidden) -->
+        <div id="app-content" class="d-none">
+            <!-- Spotify Login Section -->
+            <div id="spotify-login-section" class="text-center mb-4">
+                <p>To enable full playback, please log in to Spotify Premium:</p>
+                <a href="/login" class="btn btn-success btn-lg">Login with Spotify</a>
+            </div>
+
+            <!-- Recommendation Section -->
+            <div id="recommendation-section">
+                <!-- Input Form -->
+                <form id="recommend-form" class="row g-3 justify-content-center mb-5">
+                    <div class="col-md-4">
+                        <input type="text" id="track-name" class="form-control" placeholder="Enter a song name (e.g., Gravity)" required>
+                    </div>
+                    <div class="col-md-4">
+                        <input type="text" id="artist-name" class="form-control" placeholder="Enter an artist name (e.g., John Mayer)" required>
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-success w-100" type="submit">Recommend</button>
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-warning w-100" type="button" id="reset-bandit-btn">Reset Scores</button>
+                    </div>
+                </form>
+
+                <!-- Loading Spinner -->
+                <div id="loader" class="text-center d-none">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+
+                <!-- Error Message -->
+                <div id="error-message" class="alert alert-danger d-none" role="alert">
+                    <!-- Error content will be inserted here -->
+                </div>
+
+                <!-- Results Section -->
+                <div id="results" class="row g-4">
+                    <!-- Recommendation cards will be inserted here -->
+                </div>
+            </div>
+
+            <!-- Playlists Section -->
+            <div id="playlists-section" class="mt-5 d-none">
+                <h2 class="text-center mb-4">Your Playlists</h2>
+                <ul class="nav nav-tabs justify-content-center mb-3" id="playlist-tabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="playlist-0-tab" data-bs-toggle="tab" data-bs-target="#playlist-0" type="button" role="tab" aria-controls="playlist-0" aria-selected="true">Skipped (0)</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="playlist-1-tab" data-bs-toggle="tab" data-bs-target="#playlist-1" type="button" role="tab" aria-controls="playlist-1" aria-selected="false">Rating 1</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="playlist-2-tab" data-bs-toggle="tab" data-bs-target="#playlist-2" type="button" role="tab" aria-controls="playlist-2" aria-selected="false">Rating 2</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="playlist-3-tab" data-bs-toggle="tab" data-bs-target="#playlist-3" type="button" role="tab" aria-controls="playlist-3" aria-selected="false">Rating 3</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="playlist-4-tab" data-bs-toggle="tab" data-bs-target="#playlist-4" type="button" role="tab" aria-controls="playlist-4" aria-selected="false">Rating 4</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="playlist-5-tab" data-bs-toggle="tab" data-bs-target="#playlist-5" type="button" role="tab" aria-controls="playlist-5" aria-selected="false">Rating 5</button>
+                    </li>
+                </ul>
+                <div class="text-center mb-3">
+                    <button id="export-playlist-btn" class="btn btn-success btn-lg">Export Active Playlist to Spotify</button>
+                </div>
+                <div class="tab-content" id="playlist-tab-content">
+                    <div class="tab-pane fade show active" id="playlist-0" role="tabpanel" aria-labelledby="playlist-0-tab"></div>
+                    <div class="tab-pane fade" id="playlist-1" role="tabpanel" aria-labelledby="playlist-1-tab"></div>
+                    <div class="tab-pane fade" id="playlist-2" role="tabpanel" aria-labelledby="playlist-2-tab"></div>
+                    <div class="tab-pane fade" id="playlist-3" role="tabpanel" aria-labelledby="playlist-3-tab"></div>
+                    <div class="tab-pane fade" id="playlist-4" role="tabpanel" aria-labelledby="playlist-4-tab"></div>
+                    <div class="tab-pane fade" id="playlist-5" role="tabpanel" aria-labelledby="playlist-5-tab"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    </div>
+
+    <!-- Mini Player Bar -->
+    <div id="mini-player-bar" class="mini-player-bar d-none">
+        <div class="d-flex align-items-center flex-grow-1">
+            <img id="mini-player-album-art" src="" alt="Album Art" class="me-3 rounded" style="width: 50px; height: 50px;">
+            <div class="flex-grow-1 me-3">
+                <div id="mini-player-track-name" class="text-white fw-bold text-truncate"></div>
+                <div id="mini-player-artist-name" class="text-muted small text-truncate"></div>
+            </div>
+            <div class="d-flex align-items-center me-3">
+                <button id="mini-player-previous" class="btn btn-outline-light btn-sm me-1"><i class="bi bi-skip-start-fill"></i></button>
+                <button id="mini-player-toggle-play" class="btn btn-outline-light btn-sm me-1"><i class="bi bi-play-fill"></i></button>
+                <button id="mini-player-next" class="btn btn-outline-light btn-sm me-1"><i class="bi bi-skip-end-fill"></i></button>
+                <button id="mini-player-shuffle" class="btn btn-outline-light btn-sm"><i class="bi bi-shuffle"></i></button>
+            </div>
+            <div class="d-flex align-items-center flex-grow-1">
+                <span id="mini-player-current-time" class="text-white small me-2">0:00</span>
+                <input type="range" id="mini-player-seek-slider" class="form-range flex-grow-1" min="0" max="100" value="0">
+                <span id="mini-player-total-time" class="text-white small ms-2">0:00</span>
+            </div>
+            <div class="d-flex align-items-center ms-3">
+                <i class="bi bi-volume-down-fill text-white me-2"></i>
+                <input type="range" id="mini-player-volume-slider" class="form-range" min="0" max="1" step="0.01" value="0.5" style="width: 100px;">
+                <i class="bi bi-volume-up-fill text-white ms-2"></i>
+            </div>
+        </div>
+        <button type="button" class="btn-close btn-close-white mini-player-close-btn" aria-label="Close" id="mini-player-close"></button>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Bootstrap Icons (for play/pause) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    <!-- ColorThief for dynamic background -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/color-thief/2.3.0/color-thief.umd.js"></script>
+    <!-- Spotify Web Playback SDK -->
+    <script src="https://sdk.scdn.co/spotify-player.js"></script>
+    <!-- Custom JS -->
+    <script src="/static/script.js"></script>
+</body>
+</html>
