@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import RedirectResponse, JSONResponse
+from fastapi.responses import RedirectResponse, JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -107,8 +107,11 @@ WEBPLAYER_DIR = os.path.join(os.path.dirname(__file__), 'webplayer')
 
 # Check if the directory exists
 if not os.path.isdir(WEBPLAYER_DIR):
-    raise RuntimeError(f"Webplayer directory not found at {WEBPLAYER_DIR}")
+    print(f"Warning: Webplayer directory not found at {WEBPLAYER_DIR}")
+    # Create empty directory structure for production
+    os.makedirs(WEBPLAYER_DIR, exist_ok=True)
 
+# Mount static files - serve webplayer directory as static files
 app.mount("/static", StaticFiles(directory=WEBPLAYER_DIR), name="static")
 
 @app.get("/")
@@ -116,7 +119,29 @@ async def read_index():
     """
     Serves the main index.html file for the frontend.
     """
-    return FileResponse(os.path.join(WEBPLAYER_DIR, 'index.html'))
+    index_path = os.path.join(WEBPLAYER_DIR, 'index.html')
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    else:
+        # Return a simple HTML if index.html not found
+        return HTMLResponse("""
+        <!DOCTYPE html>
+        <html>
+        <head><title>Music Recommender</title></head>
+        <body>
+            <h1>Music Recommender</h1>
+            <p>Static files not found. Please check your deployment.</p>
+        </body>
+        </html>
+        """)
+
+# Add a test endpoint to check static files
+@app.get("/test-static")
+async def test_static():
+    files = []
+    if os.path.isdir(WEBPLAYER_DIR):
+        files = os.listdir(WEBPLAYER_DIR)
+    return {"webplayer_dir": WEBPLAYER_DIR, "files": files, "exists": os.path.isdir(WEBPLAYER_DIR)}
 
 # --- Spotify OAuth Endpoints ---
 @app.get("/login")
