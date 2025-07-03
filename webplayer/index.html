@@ -11,331 +11,564 @@
     <!-- Bootstrap Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="/static/style.css">
     <style>
-        html, body {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        :root {
+            --spotify-green: #1DB954;
+            --spotify-black: #191414;
+            --spotify-dark-gray: #121212;
+            --spotify-gray: #282828;
+            --spotify-light-gray: #b3b3b3;
+            --spotify-white: #ffffff;
+            --transition: all 0.3s ease;
         }
+
         * {
             box-sizing: border-box;
         }
-        body {
-            display: flex;
-            min-height: 100vh;
-            background-color: #121212; /* Dark background for Spotify feel */
-            color: #ffffff;
-        }
-        #sidebar {
-            width: 250px;
-            background-color: #000000; /* Black sidebar */
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: flex-start;
-            border-right: 1px solid #282828;
-        }
-        #sidebar .nav-link {
-            color: #b3b3b3;
-            font-weight: bold;
-            padding: 10px 15px;
-            width: 100%;
-            text-align: left;
-            border-radius: 5px;
-            margin-bottom: 5px;
-        }
-        #sidebar .nav-link:hover,
-        #sidebar .nav-link.active {
-            color: #ffffff;
-            background-color: #282828;
-        }
-        #main-content {
-            flex-grow: 1;
-            padding: 20px;
-            overflow-y: auto;
-            padding-bottom: 180px; /* Further increased padding */
-        }
-        .card {
-            background-color: #282828; /* Darker card background */
-            color: #ffffff;
-            border: none;
-            transition: transform 0.2s ease-in-out;
-        }
-        .card:hover {
-            transform: translateY(-5px);
-        }
-        .card-title {
-            color: #ffffff;
-        }
-        .card-text {
-            color: #b3b3b3;
-        }
-        .mini-player-bar {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            width: 100vw;
-            background-color: rgba(40, 40, 40, 0.95);
-            padding: 10px 20px;
-            display: grid;
-            grid-template-columns: 400px 1fr 200px; /* Increased left column width */
-            gap: 20px;
-            align-items: center;
-            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.5);
-            z-index: 1050;
-            height: 90px;
-            border-top: 1px solid #404040;
-            backdrop-filter: blur(10px);
-        }
-        .mini-player-bar > div {
-            display: flex;
-            align-items: center;
-        }
-        
-        /* Left section: Track info and controls */
-        .mini-player-bar .player-left {
-            display: flex;
-            align-items: center;
-            gap: 20px; /* Increased gap */
-            width: 100%;
-        }
-        
-        /* Center section: Seek bar and time */
-        .mini-player-bar .player-center {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            flex-grow: 1;
-        }
-        
-        /* Right section: Volume control */
-        .mini-player-bar .player-right {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            justify-content: flex-end;
-        }
-        
-        /* Track info section */
-        .mini-player-track-info {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            min-width: 200px; /* Set minimum width */
-            flex: 0 0 auto; /* Don't grow or shrink */
-        }
-        
-        /* Track text container */
-        .mini-player-track-text {
-            min-width: 0; /* Allow text to shrink */
-            max-width: 180px; /* Limit max width */
-        }
-        
-        /* Control buttons section */
-        .mini-player-controls {
-            display: flex;
-            align-items: center;
-            gap: 5px; /* Reduced gap between buttons */
-            flex-shrink: 0;
-        }
-        .mini-player-close-btn {
-            position: absolute;
-            right: 10px;
-            top: 50%;
-            transform: translateY(-50%);
-        }
-        .mini-player-bar .form-range::-webkit-slider-thumb {
-            background-color: #1DB954; /* Spotify green */
-        }
-        .mini-player-bar .form-range::-moz-range-thumb {
-            background-color: #1DB954; /* Spotify green */
-        }
-        .btn-outline-light {
-            color: #ffffff;
-            border-color: #ffffff;
-        }
-        .btn-outline-light:hover {
-            background-color: #ffffff;
-            color: #000000;
-        }
-        .btn-success {
-            background-color: #1DB954;
-            border-color: #1DB954;
-        }
-        .btn-success:hover {
-            background-color: #1ed760;
-            border-color: #1ed760;
-        }
-        .btn-primary {
-            background-color: #5a219e;
-            border-color: #5a219e;
-        }
-        .btn-primary:hover {
-            background-color: #6f32b8;
-            border-color: #6f32b8;
-        }
-        .btn-warning {
-            background-color: #ffc107;
-            border-color: #ffc107;
-            color: #000000;
-        }
-        .btn-warning:hover {
-            background-color: #e0a800;
-            border-color: #e0a800;
-        }
-        .feedback-btn {
-            background-color: #1DB954;
-            border-color: #1DB954;
-            color: #ffffff;
-        }
-        .feedback-btn:hover {
-            background-color: #1ed760;
-            border-color: #1ed760;
-        }
-        .feedback-btn:active {
-            background-color: #178B40;
-            border-color: #178B40;
-        }
-        .btn-group .btn-outline-success {
-            color: #ffffff;
-            border-color: #1DB954;
-        }
-        .btn-group .btn-outline-success:hover {
-            background-color: #1DB954;
-            color: #ffffff;
-        }
-        .btn-group .btn-outline-success:active {
-            background-color: #178B40;
-            border-color: #178B40;
-        }
-        .nav-tabs .nav-link {
-            color: #b3b3b3;
-        }
-        .nav-tabs .nav-link.active {
-            color: #ffffff;
-            background-color: #282828;
-            border-color: #282828;
-        }
-        .tab-pane {
-            padding: 15px;
-            background-color: #282828;
-            border-radius: 0 0 8px 8px;
-        }
-        
-        /* Additional spacing for recommendation cards to avoid player overlap */
-        #results {
-            margin-bottom: 50px; /* Increased margin */
-        }
-        
-        /* Ensure playlists section has proper spacing */
-        #playlists-section {
-            margin-bottom: 50px; /* Increased margin */
-        }
-        
-        /* Add extra spacing to the last row of cards */
-        #results .col-md-4:nth-last-child(-n+4),
-        #results .col-lg-3:nth-last-child(-n+4) {
-            margin-bottom: 30px;
-        }
-        
-        /* Ensure content container doesn't overlap with fixed player */
-        .container-fluid {
-            min-height: calc(100vh - 90px); /* Account for player bar height */
-        }
-        
-        /* Add scroll margin to prevent content hiding behind player */
-        html {
-            scroll-padding-bottom: 90px;
-        }
-        
-        /* Fix any potential overflow issues */
-        body {
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
             overflow-x: hidden;
         }
 
-        /* Welcome screen styles */
+        body {
+            background: linear-gradient(135deg, var(--spotify-dark-gray) 0%, var(--spotify-black) 100%);
+            color: var(--spotify-white);
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+        }
+
+        /* Layout */
+        .app-container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 280px;
+            background: var(--spotify-black);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid var(--spotify-gray);
+            position: fixed;
+            height: 100vh;
+            left: 0;
+            top: 0;
+            z-index: 1000;
+            transition: var(--transition);
+        }
+
+        .sidebar-header {
+            margin-bottom: 2rem;
+        }
+
+        .sidebar-header h3 {
+            color: var(--spotify-green);
+            font-weight: bold;
+            font-size: 1.5rem;
+        }
+
+        .sidebar .nav-link {
+            color: var(--spotify-light-gray);
+            font-weight: 500;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .sidebar .nav-link:hover,
+        .sidebar .nav-link.active {
+            color: var(--spotify-white);
+            background-color: var(--spotify-gray);
+        }
+
+        .sidebar .nav-link i {
+            font-size: 1.2rem;
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            margin-left: 280px;
+            padding: 20px;
+            padding-bottom: 120px;
+            min-height: 100vh;
+        }
+
+        /* Welcome Screen */
         .welcome-screen {
-            background: linear-gradient(135deg, #1DB954, #191414);
+            background: linear-gradient(135deg, var(--spotify-green), var(--spotify-black));
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 2000;
         }
-        
+
         .welcome-card {
-            background: rgba(40, 40, 40, 0.9);
+            background: rgba(25, 20, 20, 0.95);
             border-radius: 20px;
             padding: 40px;
             text-align: center;
-            max-width: 500px;
+            max-width: 600px;
+            margin: 20px;
             backdrop-filter: blur(10px);
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
         }
 
         .mode-selection-card {
             background: rgba(40, 40, 40, 0.95);
             border-radius: 15px;
             padding: 30px;
-            margin: 20px 0;
+            margin: 15px 0;
             border: 2px solid transparent;
-            transition: all 0.3s ease;
+            transition: var(--transition);
             cursor: pointer;
         }
 
         .mode-selection-card:hover {
-            border-color: #1DB954;
-            transform: translateY(-5px);
-            box-shadow: 0 10px 30px rgba(29, 185, 84, 0.3);
+            border-color: var(--spotify-green);
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(29, 185, 84, 0.3);
         }
 
         .step-indicator {
             background: rgba(29, 185, 84, 0.2);
-            border: 2px solid #1DB954;
+            border: 2px solid var(--spotify-green);
             border-radius: 50%;
-            width: 40px;
-            height: 40px;
+            width: 50px;
+            height: 50px;
             display: flex;
             align-items: center;
             justify-content: center;
             margin: 0 auto 20px;
             font-weight: bold;
-            color: #1DB954;
+            color: var(--spotify-green);
+            font-size: 1.2rem;
         }
 
-        .user-info-display {
-            background: rgba(29, 185, 84, 0.1);
-            border: 1px solid #1DB954;
-            border-radius: 10px;
+        /* Cards */
+        .card {
+            background: var(--spotify-gray);
+            border: none;
+            border-radius: 12px;
+            transition: var(--transition);
+            overflow: hidden;
+            height: 100%;
+        }
+
+        .card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+        }
+
+        .card-img-top {
+            height: 200px;
+            object-fit: cover;
+            border-radius: 12px 12px 0 0;
+        }
+
+        .card-body {
+            padding: 20px;
+        }
+
+        .card-title {
+            color: var(--spotify-white);
+            font-weight: 600;
+            font-size: 1.1rem;
+            margin-bottom: 8px;
+        }
+
+        .card-text {
+            color: var(--spotify-light-gray);
+            font-size: 0.95rem;
+        }
+
+        /* Buttons */
+        .btn {
+            border-radius: 25px;
+            font-weight: 500;
+            padding: 10px 20px;
+            transition: var(--transition);
+            border: none;
+        }
+
+        .btn-success {
+            background-color: var(--spotify-green);
+        }
+
+        .btn-success:hover {
+            background-color: #1ed760;
+            transform: translateY(-2px);
+        }
+
+        .btn-outline-success {
+            color: var(--spotify-green);
+            border-color: var(--spotify-green);
+        }
+
+        .btn-outline-success:hover {
+            background-color: var(--spotify-green);
+            border-color: var(--spotify-green);
+            color: white;
+        }
+
+        .btn-outline-light {
+            color: var(--spotify-white);
+            border-color: var(--spotify-light-gray);
+        }
+
+        .btn-outline-light:hover {
+            background-color: var(--spotify-white);
+            color: var(--spotify-black);
+        }
+
+        /* Form Controls */
+        .form-control {
+            background-color: var(--spotify-gray);
+            border: 2px solid transparent;
+            color: var(--spotify-white);
+            border-radius: 25px;
+            padding: 12px 20px;
+            transition: var(--transition);
+        }
+
+        .form-control:focus {
+            background-color: var(--spotify-gray);
+            border-color: var(--spotify-green);
+            color: var(--spotify-white);
+            box-shadow: 0 0 0 0.2rem rgba(29, 185, 84, 0.25);
+        }
+
+        .form-control::placeholder {
+            color: var(--spotify-light-gray);
+        }
+
+        /* Mini Player */
+        .mini-player {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(25, 20, 20, 0.95);
+            backdrop-filter: blur(10px);
+            border-top: 1px solid var(--spotify-gray);
+            padding: 15px 20px;
+            z-index: 1050;
+            display: grid;
+            grid-template-columns: 1fr 2fr 1fr;
+            gap: 20px;
+            align-items: center;
+            min-height: 90px;
+        }
+
+        .mini-player-left {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .mini-player-center {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .mini-player-controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .mini-player-seek {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .mini-player-right {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .album-art {
+            width: 60px;
+            height: 60px;
+            border-radius: 8px;
+            object-fit: cover;
+        }
+
+        .track-info h6 {
+            margin: 0;
+            color: var(--spotify-white);
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        .track-info p {
+            margin: 0;
+            color: var(--spotify-light-gray);
+            font-size: 0.8rem;
+        }
+
+        /* Range Sliders */
+        .form-range {
+            background: transparent;
+            height: 6px;
+        }
+
+        .form-range::-webkit-slider-track {
+            background: var(--spotify-gray);
+            border-radius: 3px;
+            height: 6px;
+        }
+
+        .form-range::-webkit-slider-thumb {
+            background: var(--spotify-green);
+            border: none;
+            border-radius: 50%;
+            width: 16px;
+            height: 16px;
+            margin-top: -5px;
+        }
+
+        .form-range::-moz-range-track {
+            background: var(--spotify-gray);
+            border-radius: 3px;
+            height: 6px;
+        }
+
+        .form-range::-moz-range-thumb {
+            background: var(--spotify-green);
+            border: none;
+            border-radius: 50%;
+            width: 16px;
+            height: 16px;
+        }
+
+        /* Playlists */
+        .nav-tabs .nav-link {
+            color: var(--spotify-light-gray);
+            border: none;
+            border-radius: 25px 25px 0 0;
+            padding: 12px 20px;
+        }
+
+        .nav-tabs .nav-link.active {
+            color: var(--spotify-white);
+            background-color: var(--spotify-gray);
+            border-color: var(--spotify-gray);
+        }
+
+        .playlist-item {
+            background: var(--spotify-gray);
+            border-radius: 8px;
             padding: 15px;
-            margin: 15px 0;
+            margin-bottom: 10px;
+            transition: var(--transition);
+            cursor: pointer;
+        }
+
+        .playlist-item:hover {
+            background: #333;
+            transform: translateX(5px);
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 100%;
+                height: auto;
+                position: static;
+            }
+
+            .main-content {
+                margin-left: 0;
+            }
+
+            .mini-player {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto auto auto;
+                gap: 10px;
+                text-align: center;
+            }
+
+            .mini-player-left,
+            .mini-player-center,
+            .mini-player-right {
+                justify-content: center;
+            }
+
+            .welcome-card {
+                margin: 10px;
+                padding: 20px;
+            }
+
+            .mode-selection-card {
+                padding: 20px;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .sidebar {
+                padding: 15px;
+            }
+
+            .main-content {
+                padding: 15px;
+                padding-bottom: 150px;
+            }
+
+            .card-img-top {
+                height: 150px;
+            }
+
+            .btn {
+                padding: 8px 16px;
+                font-size: 0.9rem;
+            }
+        }
+
+        /* Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.6s ease-out;
+        }
+
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+
+        /* Loading states */
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+        .spinner-border {
+            color: var(--spotify-green);
+        }
+
+        /* User info */
+        .user-info {
+            margin-top: auto;
+            padding-top: 20px;
+            border-top: 1px solid var(--spotify-gray);
+        }
+
+        .user-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+
+        /* Alerts */
+        .alert {
+            border-radius: 12px;
+            border: none;
+        }
+
+        .alert-success {
+            background-color: rgba(29, 185, 84, 0.1);
+            color: var(--spotify-green);
+            border: 1px solid var(--spotify-green);
+        }
+
+        .alert-warning {
+            background-color: rgba(255, 193, 7, 0.1);
+            color: #ffc107;
+            border: 1px solid #ffc107;
+        }
+
+        .alert-danger {
+            background-color: rgba(220, 53, 69, 0.1);
+            color: #dc3545;
+            border: 1px solid #dc3545;
+        }
+
+        /* Feedback buttons */
+        .feedback-buttons {
+            display: flex;
+            gap: 5px;
+            justify-content: space-between;
+            margin-top: 15px;
+        }
+
+        .feedback-btn {
+            flex: 1;
+            padding: 8px 4px;
+            font-size: 0.8rem;
+            border-radius: 20px;
+        }
+
+        /* Hide scrollbar but keep functionality */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--spotify-black);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--spotify-gray);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--spotify-light-gray);
         }
     </style>
 </head>
 <body>
     <!-- Welcome Screen -->
     <div id="welcome-screen" class="welcome-screen">
-        <div class="welcome-card">
-            <div class="step-indicator" id="step-indicator">1</div>
+        <div class="welcome-card fade-in">
+            <div class="step-indicator pulse" id="step-indicator">1</div>
             <h1 class="display-4 mb-4">🎵 Music Recommender</h1>
             <p class="lead mb-4">Discover new music with AI-powered recommendations</p>
             
             <!-- Step 1: User Type Selection -->
             <div id="step-1" class="step-content">
                 <h3 class="mb-4">Choose Your Experience</h3>
-                <div class="row">
+                <div class="row g-3">
                     <div class="col-md-6">
                         <div class="mode-selection-card" onclick="selectUserMode('premium')">
                             <h4><i class="bi bi-music-note-beamed"></i> Premium Experience</h4>
-                            <p class="text-muted">Full song playback, advanced features</p>
+                            <p class="text-muted mb-2">Full song playback, advanced features</p>
                             <small class="text-success">Requires Spotify Premium</small>
                         </div>
                     </div>
                     <div class="col-md-6">
                         <div class="mode-selection-card" onclick="selectUserMode('general')">
                             <h4><i class="bi bi-headphones"></i> Preview Mode</h4>
-                            <p class="text-muted">30-second previews, basic features</p>
+                            <p class="text-muted mb-2">30-second previews, basic features</p>
                             <small class="text-info">Works with any Spotify account</small>
                         </div>
                     </div>
@@ -346,13 +579,13 @@
             <div id="step-2" class="step-content d-none">
                 <h3 class="mb-4">Connect Your Spotify Account</h3>
                 <p class="mb-4">We need to connect to your Spotify account for personalized recommendations</p>
-                <div id="selected-mode-info" class="user-info-display mb-4">
+                <div id="selected-mode-info" class="alert mb-4">
                     <!-- Selected mode info will be inserted here -->
                 </div>
-                <a href="/login" class="btn btn-success btn-lg">
+                <a href="/login" class="btn btn-success btn-lg mb-3">
                     <i class="bi bi-spotify"></i> Login with Spotify
                 </a>
-                <br><br>
+                <br>
                 <button class="btn btn-outline-light" onclick="goBackToStep1()">
                     <i class="bi bi-arrow-left"></i> Change Mode
                 </button>
@@ -361,163 +594,215 @@
             <!-- Step 3: Loading -->
             <div id="step-3" class="step-content d-none">
                 <h3 class="mb-4">Setting Up Your Experience</h3>
-                <div class="spinner-border text-success" role="status">
+                <div class="spinner-border mb-3" role="status">
                     <span class="visually-hidden">Loading...</span>
                 </div>
-                <p class="mt-3">Connecting to Spotify...</p>
+                <p>Connecting to Spotify...</p>
             </div>
         </div>
     </div>
 
-    <!-- Main App (Hidden initially) -->
+    <!-- Main App -->
     <div id="main-app" class="d-none">
-        <div id="sidebar">
-            <h3 class="text-white mb-4">Music Recommender</h3>
-            <nav class="nav flex-column w-100">
-                <a class="nav-link active" href="#" id="show-recommendations">Recommendations</a>
-                <a class="nav-link" href="#" id="show-playlists">Playlists</a>
-            </nav>
-            
-            <!-- User Info Panel -->
-            <div class="mt-auto pt-3 border-top border-secondary">
-                <div id="user-info" class="text-center">
-                    <img id="user-avatar" src="" alt="User" class="rounded-circle mb-2" style="width: 50px; height: 50px; display: none;">
-                    <div id="user-name" class="text-white small"></div>
-                    <div id="user-mode" class="text-muted small"></div>
-                    <button class="btn btn-outline-light btn-sm mt-2" onclick="logoutUser()">
-                        <i class="bi bi-box-arrow-right"></i> Logout
-                    </button>
+        <div class="app-container">
+            <!-- Sidebar -->
+            <div class="sidebar">
+                <div class="sidebar-header">
+                    <h3><i class="bi bi-music-note-beamed"></i> Music Recommender</h3>
                 </div>
-            </div>
-        </div>
-
-        <div id="main-content" class="container-fluid">
-            <!-- User Product Type Info -->
-            <div id="user-product-info" class="alert alert-info d-none mb-4" role="alert">
-                <!-- Product type info will be inserted here -->
-            </div>
-
-            <!-- Recommendation Section -->
-            <div id="recommendation-section">
-                <header class="text-center mb-5">
-                    <h1 class="display-4">🎵 Your Personal DJ</h1>
-                    <p class="lead">Enter a song and artist to get personalized recommendations.</p>
-                </header>
-
-                <!-- Input Form -->
-                <form id="recommend-form" class="row g-3 justify-content-center mb-5">
-                    <div class="col-md-4">
-                        <input type="text" id="track-name" class="form-control" placeholder="Enter a song name (e.g., Gravity)" required>
+                
+                <nav class="nav flex-column">
+                    <a class="nav-link active" href="#" id="show-recommendations">
+                        <i class="bi bi-stars"></i> Recommendations
+                    </a>
+                    <a class="nav-link" href="#" id="show-playlists">
+                        <i class="bi bi-music-note-list"></i> My Playlists
+                    </a>
+                </nav>
+                
+                <!-- User Info -->
+                <div class="user-info">
+                    <div id="user-info" class="text-center">
+                        <img id="user-avatar" src="" alt="User" class="user-avatar mb-2 d-none">
+                        <div id="user-name" class="text-white small fw-bold"></div>
+                        <div id="user-mode" class="text-muted small"></div>
+                        <button class="btn btn-outline-light btn-sm mt-2" onclick="logoutUser()">
+                            <i class="bi bi-box-arrow-right"></i> Logout
+                        </button>
                     </div>
-                    <div class="col-md-4">
-                        <input type="text" id="artist-name" class="form-control" placeholder="Enter an artist name (e.g., John Mayer)" required>
-                    </div>
-                    <div class="col-md-2">
-                        <button class="btn btn-success w-100" type="submit">Recommend</button>
-                    </div>
-                    <div class="col-md-2">
-                        <button class="btn btn-warning w-100" type="button" id="reset-bandit-btn">Reset Scores</button>
-                    </div>
-                </form>
-
-                <!-- Loading Spinner -->
-                <div id="loader" class="text-center d-none">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                </div>
-
-                <!-- Error Message -->
-                <div id="error-message" class="alert alert-danger d-none" role="alert">
-                    <!-- Error content will be inserted here -->
-                </div>
-
-                <!-- Results Section -->
-                <div id="results" class="row g-4">
-                    <!-- Recommendation cards will be inserted here -->
                 </div>
             </div>
 
-            <!-- Playlists Section -->
-            <div id="playlists-section" class="mt-5 d-none">
-                <h2 class="text-center mb-4">Your Playlists</h2>
-                <ul class="nav nav-tabs justify-content-center mb-3" id="playlist-tabs" role="tablist">
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link active" id="playlist-0-tab" data-bs-toggle="tab" data-bs-target="#playlist-0" type="button" role="tab" aria-controls="playlist-0" aria-selected="true">Skipped (0)</button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="playlist-1-tab" data-bs-toggle="tab" data-bs-target="#playlist-1" type="button" role="tab" aria-controls="playlist-1" aria-selected="false">Rating 1</button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="playlist-2-tab" data-bs-toggle="tab" data-bs-target="#playlist-2" type="button" role="tab" aria-controls="playlist-2" aria-selected="false">Rating 2</button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="playlist-3-tab" data-bs-toggle="tab" data-bs-target="#playlist-3" type="button" role="tab" aria-controls="playlist-3" aria-selected="false">Rating 3</button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="playlist-4-tab" data-bs-toggle="tab" data-bs-target="#playlist-4" type="button" role="tab" aria-controls="playlist-4" aria-selected="false">Rating 4</button>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="playlist-5-tab" data-bs-toggle="tab" data-bs-target="#playlist-5" type="button" role="tab" aria-controls="playlist-5" aria-selected="false">Rating 5</button>
-                    </li>
-                </ul>
-                <div class="tab-content" id="playlist-tab-content">
-                    <div class="tab-pane fade show active" id="playlist-0" role="tabpanel" aria-labelledby="playlist-0-tab"></div>
-                    <div class="tab-pane fade" id="playlist-1" role="tabpanel" aria-labelledby="playlist-1-tab"></div>
-                    <div class="tab-pane fade" id="playlist-2" role="tabpanel" aria-labelledby="playlist-2-tab"></div>
-                    <div class="tab-pane fade" id="playlist-3" role="tabpanel" aria-labelledby="playlist-3-tab"></div>
-                    <div class="tab-pane fade" id="playlist-4" role="tabpanel" aria-labelledby="playlist-4-tab"></div>
-                    <div class="tab-pane fade" id="playlist-5" role="tabpanel" aria-labelledby="playlist-5-tab"></div>
+            <!-- Main Content -->
+            <div class="main-content">
+                <!-- User Product Type Info -->
+                <div id="user-product-info" class="alert d-none mb-4" role="alert">
+                    <!-- Product type info will be inserted here -->
+                </div>
+
+                <!-- Recommendation Section -->
+                <div id="recommendation-section" class="fade-in">
+                    <div class="text-center mb-5">
+                        <h1 class="display-5 mb-3">🎵 Your Personal DJ</h1>
+                        <p class="lead text-muted">Enter a song and artist to get personalized recommendations</p>
+                    </div>
+
+                    <!-- Input Form -->
+                    <div class="row justify-content-center mb-5">
+                        <div class="col-lg-8">
+                            <form id="recommend-form" class="row g-3">
+                                <div class="col-md-5">
+                                    <input type="text" id="track-name" class="form-control" 
+                                           placeholder="Enter a song name (e.g., Gravity)" required>
+                                </div>
+                                <div class="col-md-5">
+                                    <input type="text" id="artist-name" class="form-control" 
+                                           placeholder="Enter an artist name (e.g., John Mayer)" required>
+                                </div>
+                                <div class="col-md-2">
+                                    <button class="btn btn-success w-100" type="submit">
+                                        <i class="bi bi-search"></i> Find
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div class="text-center mb-4">
+                        <button class="btn btn-outline-light" type="button" id="reset-bandit-btn">
+                            <i class="bi bi-arrow-clockwise"></i> Reset Scores
+                        </button>
+                    </div>
+
+                    <!-- Loading Spinner -->
+                    <div id="loader" class="text-center d-none">
+                        <div class="spinner-border mb-3" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="text-muted">Finding perfect tracks for you...</p>
+                    </div>
+
+                    <!-- Error Message -->
+                    <div id="error-message" class="alert alert-danger d-none" role="alert">
+                        <!-- Error content will be inserted here -->
+                    </div>
+
+                    <!-- Results Section -->
+                    <div id="results" class="row g-4">
+                        <!-- Recommendation cards will be inserted here -->
+                    </div>
+                </div>
+
+                <!-- Playlists Section -->
+                <div id="playlists-section" class="d-none fade-in">
+                    <div class="text-center mb-4">
+                        <h2><i class="bi bi-music-note-list"></i> Your Music Collections</h2>
+                        <p class="text-muted">Organize your rated tracks</p>
+                    </div>
+                    
+                    <ul class="nav nav-tabs justify-content-center mb-4" id="playlist-tabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="playlist-0-tab" data-bs-toggle="tab" 
+                                    data-bs-target="#playlist-0" type="button" role="tab">
+                                Skipped (0)
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="playlist-1-tab" data-bs-toggle="tab" 
+                                    data-bs-target="#playlist-1" type="button" role="tab">
+                                ⭐ Rating 1
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="playlist-2-tab" data-bs-toggle="tab" 
+                                    data-bs-target="#playlist-2" type="button" role="tab">
+                                ⭐⭐ Rating 2
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="playlist-3-tab" data-bs-toggle="tab" 
+                                    data-bs-target="#playlist-3" type="button" role="tab">
+                                ⭐⭐⭐ Rating 3
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="playlist-4-tab" data-bs-toggle="tab" 
+                                    data-bs-target="#playlist-4" type="button" role="tab">
+                                ⭐⭐⭐⭐ Rating 4
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="playlist-5-tab" data-bs-toggle="tab" 
+                                    data-bs-target="#playlist-5" type="button" role="tab">
+                                ⭐⭐⭐⭐⭐ Rating 5
+                            </button>
+                        </li>
+                    </ul>
+                    
+                    <div class="tab-content" id="playlist-tab-content">
+                        <div class="tab-pane fade show active" id="playlist-0" role="tabpanel"></div>
+                        <div class="tab-pane fade" id="playlist-1" role="tabpanel"></div>
+                        <div class="tab-pane fade" id="playlist-2" role="tabpanel"></div>
+                        <div class="tab-pane fade" id="playlist-3" role="tabpanel"></div>
+                        <div class="tab-pane fade" id="playlist-4" role="tabpanel"></div>
+                        <div class="tab-pane fade" id="playlist-5" role="tabpanel"></div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Mini Player Bar -->
-    <div id="mini-player-bar" class="mini-player-bar d-none">
-        <!-- Left section: Track info and controls -->
-        <div class="player-left">
-            <div class="mini-player-track-info">
-                <img id="mini-player-album-art" src="" alt="Album Art" class="rounded" style="width: 50px; height: 50px;">
-                <div class="mini-player-track-text">
-                    <div id="mini-player-track-name" class="text-white fw-bold text-truncate" style="font-size: 14px; line-height: 1.2;"></div>
-                    <div id="mini-player-artist-name" class="text-muted small text-truncate" style="font-size: 12px;"></div>
-                </div>
+    <!-- Mini Player -->
+    <div id="mini-player" class="mini-player d-none">
+        <!-- Left: Track Info -->
+        <div class="mini-player-left">
+            <img id="mini-player-album-art" src="" alt="Album Art" class="album-art">
+            <div class="track-info">
+                <h6 id="mini-player-track-name">Track Name</h6>
+                <p id="mini-player-artist-name">Artist Name</p>
             </div>
+        </div>
+        
+        <!-- Center: Controls & Seek -->
+        <div class="mini-player-center">
             <div class="mini-player-controls">
-                <button id="mini-player-previous" class="btn btn-outline-light btn-sm" style="padding: 4px 8px;"><i class="bi bi-skip-start-fill"></i></button>
-                <button id="mini-player-toggle-play" class="btn btn-outline-light btn-sm" style="padding: 4px 8px;"><i class="bi bi-play-fill"></i></button>
-                <button id="mini-player-next" class="btn btn-outline-light btn-sm" style="padding: 4px 8px;"><i class="bi bi-skip-end-fill"></i></button>
-                <button id="mini-player-shuffle" class="btn btn-outline-light btn-sm" style="padding: 4px 8px;"><i class="bi bi-shuffle"></i></button>
+                <button id="mini-player-previous" class="btn btn-outline-light btn-sm">
+                    <i class="bi bi-skip-start-fill"></i>
+                </button>
+                <button id="mini-player-play" class="btn btn-success">
+                    <i class="bi bi-play-fill"></i>
+                </button>
+                <button id="mini-player-next" class="btn btn-outline-light btn-sm">
+                    <i class="bi bi-skip-end-fill"></i>
+                </button>
+                <button id="mini-player-shuffle" class="btn btn-outline-light btn-sm">
+                    <i class="bi bi-shuffle"></i>
+                </button>
+            </div>
+            <div class="mini-player-seek">
+                <span id="current-time" class="small text-muted">0:00</span>
+                <input type="range" id="seek-slider" class="form-range flex-grow-1 mx-2" 
+                       min="0" max="100" value="0">
+                <span id="total-time" class="small text-muted">0:00</span>
             </div>
         </div>
         
-        <!-- Center section: Seek bar and time -->
-        <div class="player-center">
-            <span id="mini-player-current-time" class="text-white small">0:00</span>
-            <input type="range" id="mini-player-seek-slider" class="form-range flex-grow-1" min="0" max="100" value="0">
-            <span id="mini-player-total-time" class="text-white small">0:00</span>
+        <!-- Right: Volume & Close -->
+        <div class="mini-player-right">
+            <i class="bi bi-volume-down text-muted"></i>
+            <input type="range" id="volume-slider" class="form-range mx-2" 
+                   min="0" max="1" step="0.01" value="0.5" style="width: 100px;">
+            <i class="bi bi-volume-up text-muted"></i>
+            <button type="button" class="btn-close btn-close-white ms-2" id="mini-player-close"></button>
         </div>
-        
-        <!-- Right section: Volume control -->
-        <div class="player-right">
-            <i class="bi bi-volume-down-fill text-white"></i>
-            <input type="range" id="mini-player-volume-slider" class="form-range" min="0" max="1" step="0.01" value="0.5" style="width: 100px;">
-            <i class="bi bi-volume-up-fill text-white"></i>
-        </div>
-        
-        <button type="button" class="btn-close btn-close-white mini-player-close-btn" aria-label="Close" id="mini-player-close"></button>
     </div>
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <!-- ColorThief for dynamic background -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/color-thief/2.3.0/color-thief.umd.js"></script>
     <!-- Custom JS -->
     <script src="/static/script.js"></script>
-    <!-- Spotify Web Playback SDK - 조건부 로드 -->
+    <!-- Spotify Web Playback SDK -->
     <script>
-        // Premium 사용자가 선택될 때만 Spotify SDK 로드
         window.loadSpotifySDK = function() {
             if (!document.querySelector('script[src*="spotify-player.js"]')) {
                 const script = document.createElement('script');
@@ -527,27 +812,24 @@
             }
         };
 
-        // Welcome screen navigation functions
+        // Welcome screen functions
         function selectUserMode(mode) {
             window.selectedUserMode = mode;
-            
-            // Update step indicator
             document.getElementById('step-indicator').textContent = '2';
-            
-            // Hide step 1, show step 2
             document.getElementById('step-1').classList.add('d-none');
             document.getElementById('step-2').classList.remove('d-none');
             
-            // Update selected mode info
             const modeInfo = document.getElementById('selected-mode-info');
             if (mode === 'premium') {
+                modeInfo.className = 'alert alert-success mb-4';
                 modeInfo.innerHTML = `
-                    <h5><i class="bi bi-music-note-beamed text-success"></i> Premium Experience Selected</h5>
+                    <h5><i class="bi bi-music-note-beamed"></i> Premium Experience Selected</h5>
                     <p class="mb-0">You'll get full song playback and advanced features. Requires Spotify Premium account.</p>
                 `;
             } else {
+                modeInfo.className = 'alert alert-info mb-4';
                 modeInfo.innerHTML = `
-                    <h5><i class="bi bi-headphones text-info"></i> Preview Mode Selected</h5>
+                    <h5><i class="bi bi-headphones"></i> Preview Mode Selected</h5>
                     <p class="mb-0">You'll get 30-second previews and basic features. Works with any Spotify account.</p>
                 `;
             }
@@ -559,12 +841,6 @@
             document.getElementById('step-1').classList.remove('d-none');
         }
 
-        function showLoadingStep() {
-            document.getElementById('step-indicator').textContent = '3';
-            document.getElementById('step-2').classList.add('d-none');
-            document.getElementById('step-3').classList.remove('d-none');
-        }
-
         function showMainApp() {
             document.getElementById('welcome-screen').classList.add('d-none');
             document.getElementById('main-app').classList.remove('d-none');
@@ -572,11 +848,8 @@
 
         function logoutUser() {
             if (confirm('Are you sure you want to logout?')) {
-                // Clear all stored data
                 localStorage.clear();
                 sessionStorage.clear();
-                
-                // Redirect to logout endpoint or reload page
                 window.location.href = '/logout';
             }
         }
