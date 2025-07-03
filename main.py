@@ -25,20 +25,53 @@ def get_spotify_access_token_for_sdk():
     """
     Provides the access token for the Spotify Web Playback SDK.
     This will trigger the OAuth flow if no token is available.
+    For search purposes, use Client Credentials flow.
     """
-    if not spotify_auth_manager.get_access_token():
-        # In a real web app, you'd redirect the user to spotify_auth_manager.get_authorize_url()
-        # For this CLI context, we'll just return None and expect the frontend to handle the redirect.
+    # First try to get user token from OAuth flow
+    if spotify_auth_manager.get_access_token():
+        return spotify_auth_manager.get_access_token()
+    
+    # Fallback: Get Client Credentials token for search-only access
+    try:
+        import base64
+        import requests
+        
+        # Client Credentials Flow
+        auth_str = f"{SPOTIFY_CLIENT_ID}:{SPOTIFY_CLIENT_SECRET}"
+        b64_auth = base64.b64encode(auth_str.encode()).decode()
+        
+        headers = {
+            "Authorization": f"Basic {b64_auth}",
+            "Content-Type": "application/x-www-form-urlencoded"
+        }
+        data = {"grant_type": "client_credentials"}
+        
+        response = requests.post("https://accounts.spotify.com/api/token", headers=headers, data=data)
+        
+        if response.status_code == 200:
+            token_data = response.json()
+            print(f"[Backend] Got Client Credentials token for search")
+            return token_data.get("access_token")
+        else:
+            print(f"[Backend] Failed to get Client Credentials token: {response.status_code}")
+            return None
+            
+    except Exception as e:
+        print(f"[Backend] Error getting Client Credentials token: {e}")
         return None
-    return spotify_auth_manager.get_access_token()
 
 # --- Initialization ---
 # Initialize the core components of the recommender system.
 # This is now simplified and corrected.
+print(f"[Backend] Initializing with LASTFM_API_KEY: {bool(LASTFM_API_KEY)}")
+print(f"[Backend] SPOTIFY_CLIENT_ID: {bool(SPOTIFY_CLIENT_ID)}")
+print(f"[Backend] SPOTIFY_CLIENT_SECRET: {bool(SPOTIFY_CLIENT_SECRET)}")
+
 try:
     lastfm_client = LastFMClient()
     bandit = ThompsonSampling() # Changed to ThompsonSampling
     recommender = Recommender(lastfm_client, bandit)
+    print("[Backend] Recommender system initialized successfully")
 except Exception as e:
     print(f"Error during initialization: {e}")
     recommender = None
@@ -173,14 +206,18 @@ async def spotify_sdk_token():
     """
     Provides the Spotify Web Playback SDK token and user product type to the frontend.
     """
-    access_token = get_spotify_access_token_for_sdk()
-    if not access_token:
-        raise HTTPException(status_code=401, detail="Spotify access token not available. Please log in.")
-    
-    user_profile = get_user_profile(access_token)
-    product_type = user_profile.get('product', 'free') if user_profile else 'free'
+    try:
+        access_token = get_spotify_access_token_for_sdk()
+        if not access_token:
+            raise HTTPException(status_code=401, detail="Spotify access token not available. Please log in.")
+        
+        user_profile = get_user_profile(access_token)
+        product_type = user_profile.get('product', 'free') if user_profile else 'free'
 
-    return {"access_token": access_token, "token_type": "Bearer", "expires_in": 3600, "product_type": product_type}
+        return {"access_token": access_token, "token_type": "Bearer", "expires_in": 3600, "product_type": product_type}
+    except Exception as e:
+        print(f"[Backend] Error in spotify_sdk_token: {e}")
+        raise HTTPException(status_code=503, detail="Spotify service temporarily unavailable")
 
 @app.get("/user_profile")
 async def user_profile_endpoint():
@@ -237,6 +274,13 @@ def get_recommendations_api(request: RecommendRequest):
         spotify_recommendations = []
         access_token = get_spotify_access_token_for_sdk()
         
+        if not access_token:
+            print("[Backend] No Spotify access token available - trying to get one...")
+            # Try to get Client Credentials token
+            access_token = get_spotify_access_token_for_sdk()
+        
+        print(f"[Backend] Using Spotify token: {bool(access_token)}")
+        
         for track in lastfm_tracks:
             try:
                 artist = track.get('artist', {})
@@ -248,8 +292,12 @@ def get_recommendations_api(request: RecommendRequest):
                 track_name = track.get('name', 'Unknown Track')
 
                 # Search on Spotify
-                spotify_info = search_track_on_spotify(track_name, artist_name, access_token=access_token)
-                print(f"[Backend] Spotify search for '{track_name}' by '{artist_name}': {spotify_info is not None}")
+                if access_token:
+                    spotify_info = search_track_on_spotify(track_name, artist_name, access_token=access_token)
+                    print(f"[Backend] Spotify search for '{track_name}' by '{artist_name}': {spotify_info is not None}")
+                else:
+                    print(f"[Backend] No access token - skipping Spotify search for '{track_name}'")
+                    spotify_info = None
 
                 if spotify_info and spotify_info.get('id'):
                     # Get album cover from Spotify's response if available
@@ -409,14 +457,67 @@ def get_one_recommendation(request: RecommendOneRequest):
         print(f"An error occurred while getting one recommendation: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/debug/config")
+def debug_config():
+    """
+    Debug endpoint to check API configuration
+    """
+    return {
+        "lastfm_api_key_exists": bool(LASTFM_API_KEY),
+        "spotify_client_id_exists": bool(SPOTIFY_CLIENT_ID),
+        "spotify_client_secret_exists": bool(SPOTIFY_CLIENT_SECRET),
+        "lastfm_api_key_length": len(LASTFM_API_KEY) if LASTFM_API_KEY else 0,
+        "spotify_client_id_length": len(SPOTIFY_CLIENT_ID) if SPOTIFY_CLIENT_ID else 0,
+        "recommender_initialized": recommender is not None
+    }
+
+@app.get("/debug/test-lastfm")
+def test_lastfm():
+    """
+    Test Last.fm API connection
+    """
+    try:
+        if not lastfm_client:
+            return {"error": "LastFM client not initialized"}
+        
+        # Simple test call
+        tracks = lastfm_client.get_similar_tracks("Gravity", "John Mayer", limit=3)
+        return {
+            "success": True,
+            "tracks_found": len(tracks),
+            "sample_track": tracks[0] if tracks else None
+        }
+    except Exception as e:
+        return {"error": str(e), "success": False}
+
+@app.get("/debug/test-spotify")
+def test_spotify():
+    """
+    Test Spotify API connection
+    """
+    try:
+        access_token = get_spotify_access_token_for_sdk()
+        if not access_token:
+            return {"error": "No Spotify access token available"}
+        
+        # Test search
+        from spotify_player import search_track_on_spotify
+        result = search_track_on_spotify("Gravity", "John Mayer", access_token)
+        return {
+            "success": True,
+            "token_exists": bool(access_token),
+            "search_result": bool(result),
+            "track_found": result.get("name") if result else None
+        }
+    except Exception as e:
+        return {"error": str(e), "success": False}
+
 @app.get("/playlists")
 def get_playlists():
     """
     Returns the user's playlists based on feedback.
     """
     return user_playlists
-
-@app.post("/remove_local_playlist_track")
 async def remove_local_playlist_track(delete_request: DeleteTrackRequest):
     playlist_id = delete_request.playlist_id
     track_id = delete_request.track_id
