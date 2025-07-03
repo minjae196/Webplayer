@@ -988,10 +988,16 @@ function checkForLoginReturn() {
             setTimeout(async () => {
                 await checkUserLoginStatus();
                 
-                // Set default mode if not set
-                if (!userSelectedMode) {
+                // FIXED: Restore user selected mode properly
+                const storedMode = localStorage.getItem('selectedUserMode');
+                if (storedMode) {
+                    userSelectedMode = storedMode;
+                    console.log('✅ Restored user mode from localStorage:', userSelectedMode);
+                } else if (!userSelectedMode) {
+                    // Only set default if no mode was selected
                     userSelectedMode = currentUser?.product === 'premium' ? 'premium' : 'general';
                     localStorage.setItem('selectedUserMode', userSelectedMode);
+                    console.log('🎯 Set default mode:', userSelectedMode);
                 }
                 
                 showMainApp();
