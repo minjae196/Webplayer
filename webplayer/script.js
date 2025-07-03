@@ -20,6 +20,7 @@ let currentPlaylistIndex = -1; // Current index in the playlist
 let currentPlaylistId = null; // Current playlist ID being played
 let isShuffling = false; // Flag for shuffle mode
 let isPremiumUser = false; // Flag for premium user status
+let userSelectedMode = null; // 'premium' or 'general'
 
 // Helper function to format time
 function formatTime(ms) {
@@ -32,8 +33,8 @@ function formatTime(ms) {
 window.onSpotifyWebPlaybackSDKReady = () => {
     console.log('Spotify Web Playback SDK is ready!');
     
-    // Only initialize if user is premium
-    if (!isPremiumUser) {
+    // Only initialize if user selected premium mode
+    if (userSelectedMode !== 'premium') {
         console.log('General user mode - Spotify Player not needed');
         return;
     }
@@ -186,7 +187,7 @@ window.onSpotifyWebPlaybackSDKReady = () => {
     const seekSlider = document.getElementById('mini-player-seek-slider');
     if (seekSlider) {
         seekSlider.addEventListener('input', (event) => {
-            if (isPremiumUser) {
+            if (userSelectedMode === 'premium') {
                 if (spotifyPlayer) {
                     spotifyPlayer.seek(Number(event.target.value));
                 }
@@ -232,7 +233,7 @@ window.onSpotifyWebPlaybackSDKReady = () => {
 };
 
 async function playTrack(trackUri, playlist = [], startIndex = -1, previewUrl = null) {
-    if (isPremiumUser) {
+    if (userSelectedMode === 'premium' && isPremiumUser) {
         if (!spotifyPlayer) {
             alert('Spotify Player not ready. Please log in to Spotify.');
             return;
@@ -282,7 +283,7 @@ async function playTrack(trackUri, playlist = [], startIndex = -1, previewUrl = 
             console.error('Error playing track:', error);
             alert('Error playing track. Check console for details.');
         }
-    } else { // General user, play preview
+    } else { // General user or free user, play preview
         currentPlaylist = playlist;
         currentPlaylistIndex = startIndex;
         
@@ -364,7 +365,7 @@ function playNextTrackInPlaylist() {
         currentPlaylistIndex = 0; // Loop back to start
     }
     const nextTrack = currentPlaylist[currentPlaylistIndex];
-    if (isPremiumUser) {
+    if (userSelectedMode === 'premium' && isPremiumUser) {
         playTrack(nextTrack.uri, currentPlaylist, currentPlaylistIndex, nextTrack.preview_url);
     } else {
         // For general users, play the preview URL
@@ -388,7 +389,7 @@ function playPreviousTrackInPlaylist() {
         currentPlaylistIndex = currentPlaylist.length - 1; // Loop to end
     }
     const prevTrack = currentPlaylist[currentPlaylistIndex];
-    if (isPremiumUser) {
+    if (userSelectedMode === 'premium' && isPremiumUser) {
         playTrack(prevTrack.uri, currentPlaylist, currentPlaylistIndex, prevTrack.preview_url);
     } else {
         // For general users, play the preview URL
@@ -404,7 +405,7 @@ function playRandomTrackInPlaylist() {
     const randomIndex = Math.floor(Math.random() * currentPlaylist.length);
     currentPlaylistIndex = randomIndex;
     const randomTrack = currentPlaylist[randomIndex];
-    if (isPremiumUser) {
+    if (userSelectedMode === 'premium' && isPremiumUser) {
         playTrack(randomTrack.uri, currentPlaylist, currentPlaylistIndex, randomTrack.preview_url);
     } else {
         // For general users, play the preview URL
@@ -436,54 +437,47 @@ function updatePlaylistVisualFeedback() {
     }
 }
 
-async function fetchAndSetUserType() {
-    // Premium 사용자가 선택되었을 때만 호출되는 함수
-    console.log('Checking Spotify token for Premium user...');
+async function checkUserLoginAndSetup() {
+    console.log('Checking user login status...');
     try {
         const response = await fetch('/spotify_sdk_token');
         if (response.ok) {
             const data = await response.json();
-            isPremiumUser = (data.product_type === 'premium');
             accessToken = data.access_token;
             localStorage.setItem('spotify_access_token', data.access_token);
+            
+            // 사용자가 Premium인지 확인
+            isPremiumUser = (data.product_type === 'premium');
             console.log('User product type:', data.product_type, 'isPremiumUser:', isPremiumUser);
             
+            // UI 업데이트
             const spotifyLoginSection = document.getElementById('spotify-login-section');
             const userTypeSelection = document.getElementById('user-type-selection');
             const appContent = document.getElementById('app-content');
             
-            if (isPremiumUser) {
-                // Premium 사용자 - 바로 앱 사용 가능
-                if (spotifyLoginSection) spotifyLoginSection.classList.add('d-none');
-                if (userTypeSelection) userTypeSelection.classList.add('d-none');
-                if (appContent) appContent.classList.remove('d-none');
-                togglePlayerControls(true);
-            } else {
-                // Free 사용자 - General User 모드로 전환
-                console.log('Spotify Free user detected - switching to General User mode');
-                isPremiumUser = false;
-                if (spotifyLoginSection) spotifyLoginSection.classList.add('d-none');
-                if (userTypeSelection) userTypeSelection.classList.add('d-none');
-                if (appContent) appContent.classList.remove('d-none');
-                togglePlayerControls(true);
-            }
-        } else {
-            console.warn('Could not fetch Spotify SDK token, showing login section.');
-            isPremiumUser = true; // Premium user이지만 로그인 필요
+            // 로그인 섹션 숨기기
+            if (spotifyLoginSection) spotifyLoginSection.classList.add('d-none');
             
-            const spotifyLoginSection = document.getElementById('spotify-login-section');
-            const userTypeSelection = document.getElementById('user-type-selection');
-            const appContent = document.getElementById('app-content');
-            
-            if (spotifyLoginSection) spotifyLoginSection.classList.remove('d-none');
+            // 사용자 선택 화면 숨기기
             if (userTypeSelection) userTypeSelection.classList.add('d-none');
+            
+            // 앱 콘텐츠 표시
             if (appContent) appContent.classList.remove('d-none');
-            togglePlayerControls(false);
+            
+            // Premium 모드를 선택했지만 Free 사용자인 경우 알림
+            if (userSelectedMode === 'premium' && !isPremiumUser) {
+                alert('You have a Spotify Free account. You can still use the app with preview playback only.');
+            }
+            
+            togglePlayerControls(true);
+            return true;
+        } else {
+            console.warn('User not logged in to Spotify');
+            return false;
         }
     } catch (error) {
-        console.error('Error fetching user type:', error);
-        // 오류 발생 시 사용자 선택으로 다시 돌아가기
-        forceUserSelection();
+        console.error('Error checking user login:', error);
+        return false;
     }
 }
 
@@ -885,11 +879,12 @@ async function removeFromPlaylist(playlistId, trackId) {
     }
 }
 
-// 사용자 선택 강제 함수
+// 강제로 사용자 선택 화면으로 돌아가는 함수
 function forceUserSelection() {
     console.log('=== FORCING USER SELECTION ===');
     
     // 모든 상태 리셋
+    userSelectedMode = null;
     isPremiumUser = false;
     accessToken = null;
     currentPlaylist = [];
@@ -929,13 +924,10 @@ function forceUserSelection() {
 
 document.addEventListener('DOMContentLoaded', () => {
     // 페이지 로드 시 항상 초기 상태로 리셋
-    console.log('=== PAGE LOADED - FORCING USER SELECTION ===');
-    
-    // 모든 저장된 상태 제거
-    localStorage.clear();
-    sessionStorage.clear();
+    console.log('=== PAGE LOADED - CHECKING LOGIN STATUS ===');
     
     // 전역 변수 초기화
+    userSelectedMode = null;
     isPremiumUser = false;
     accessToken = null;
     currentPlaylist = [];
@@ -972,85 +964,68 @@ document.addEventListener('DOMContentLoaded', () => {
     const appContent = document.getElementById('app-content');
     const spotifyLoginSection = document.getElementById('spotify-login-section');
 
-    // 강제로 사용자 선택 화면만 표시
-    console.log('Forcing user type selection screen...');
-    
-    // 앱 콘텐츠 완전히 숨기기
-    if (appContent) {
-        appContent.classList.add('d-none');
-        appContent.style.display = 'none';
-    }
-    
-    // 로그인 섹션 숨기기
-    if (spotifyLoginSection) {
-        spotifyLoginSection.classList.add('d-none');
-        spotifyLoginSection.style.display = 'none';
-    }
-    
-    // 사용자 선택 화면 강제 표시
-    if (userTypeSelection) {
-        userTypeSelection.classList.remove('d-none');
-        userTypeSelection.style.display = 'block';
-        userTypeSelection.style.visibility = 'visible';
-    }
-    
-    console.log('User selection screen is now visible');
+    // 먼저 기존 로그인 상태 확인
+    checkUserLoginAndSetup().then(isLoggedIn => {
+        if (isLoggedIn) {
+            console.log('User already logged in - showing app content');
+            // 이미 로그인되어 있으면 바로 앱 사용 가능
+            // 하지만 어떤 모드를 원하는지는 다시 물어볼 수 있음
+            forceUserSelection(); // 사용자 모드 재선택
+        } else {
+            console.log('User not logged in - showing user type selection');
+            forceUserSelection();
+        }
+    });
 
     // Handle user type selection
     if (premiumUserBtn) {
-        premiumUserBtn.addEventListener('click', () => {
+        premiumUserBtn.addEventListener('click', async () => {
             console.log('=== PREMIUM USER SELECTED ===');
-            isPremiumUser = true;
-            
-            // Spotify SDK 로드
-            if (typeof window.loadSpotifySDK === 'function') {
-                window.loadSpotifySDK();
-            }
+            userSelectedMode = 'premium';
             
             // 사용자 선택 화면 숨기기
             userTypeSelection.classList.add('d-none');
-            userTypeSelection.style.display = 'none';
             
-            // 앱 콘텐츠 표시
-            appContent.classList.remove('d-none');
-            appContent.style.display = 'block';
-            
-            // Premium 사용자는 Spotify 토큰 확인 시도
-            fetchAndSetUserType();
+            // 이미 로그인되어 있는지 확인
+            const isLoggedIn = await checkUserLoginAndSetup();
+            if (!isLoggedIn) {
+                // 로그인이 필요하면 로그인 섹션 표시
+                spotifyLoginSection.classList.remove('d-none');
+                appContent.classList.remove('d-none');
+            } else {
+                // 이미 로그인되어 있으면 바로 앱 사용
+                if (typeof window.loadSpotifySDK === 'function') {
+                    window.loadSpotifySDK();
+                }
+            }
         });
     }
 
     if (generalUserBtn) {
-        generalUserBtn.addEventListener('click', () => {
+        generalUserBtn.addEventListener('click', async () => {
             console.log('=== GENERAL USER SELECTED ===');
-            isPremiumUser = false;
+            userSelectedMode = 'general';
             
             // 사용자 선택 화면 숨기기
             userTypeSelection.classList.add('d-none');
-            userTypeSelection.style.display = 'none';
             
-            // 앱 콘텐츠 표시
-            appContent.classList.remove('d-none');
-            appContent.style.display = 'block';
-            
-            // 로그인 섹션 숨기기
-            spotifyLoginSection.classList.add('d-none');
-            spotifyLoginSection.style.display = 'none';
-            
-            // 기본 컨트롤 활성화 (하지만 Spotify Player는 초기화하지 않음)
-            togglePlayerControls(true);
-            
-            // localStorage에서 Spotify 관련 정보 제거
-            localStorage.removeItem('spotify_access_token');
-            
-            console.log('General User mode activated - ready for preview playback only');
+            // 이미 로그인되어 있는지 확인
+            const isLoggedIn = await checkUserLoginAndSetup();
+            if (!isLoggedIn) {
+                // 로그인이 필요하면 로그인 섹션 표시
+                spotifyLoginSection.classList.remove('d-none');
+                appContent.classList.remove('d-none');
+            } else {
+                // 이미 로그인되어 있으면 바로 앱 사용 (Preview 모드)
+                console.log('General User mode activated with logged-in user');
+            }
         });
     }
 
     // Add event listeners for player controls
     if (togglePlayButton) {
         togglePlayButton.addEventListener('click', () => {
-            if (isPremiumUser) {
+            if (userSelectedMode === 'premium' && isPremiumUser) {
                 if (spotifyPlayer) {
                     spotifyPlayer.togglePlay();
                 }
@@ -1188,7 +1163,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (volumeSlider) {
         volumeSlider.addEventListener('input', (event) => {
             const volume = event.target.value;
-            if (isPremiumUser && spotifyPlayer) {
+            if (userSelectedMode === 'premium' && isPremiumUser && spotifyPlayer) {
                 spotifyPlayer.setVolume(volume);
             } else if (audioPreview) {
                 audioPreview.volume = volume;
