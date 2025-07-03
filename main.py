@@ -205,7 +205,7 @@ def get_recommendations_api(request: RecommendRequest):
     Takes a seed track and artist, gets recommendations from Last.fm,
     enriches them with Spotify data, and returns them.
     """
-    print(f"[Backend] Received recommendation request for track: {request.track_name}, artist: {request.artist_name}") # <-- LOG 1
+    print(f"[Backend] Received recommendation request for track: {request.track_name}, artist: {request.artist_name}")
 
     if not recommender:
         raise HTTPException(status_code=503, detail="Recommender system is not initialized.")
@@ -213,58 +213,91 @@ def get_recommendations_api(request: RecommendRequest):
     try:
         # 1. Get track recommendations from the recommender module
         lastfm_tracks = recommender.recommend_bulk(
-            mode="track", # or "artist", "tag"
+            mode="track",
             track_name=request.track_name,
             artist_name=request.artist_name,
             limit=request.num_recommendations
         )
-        print(f"[Backend] Last.fm returned {len(lastfm_tracks)} tracks.") # <-- LOG 2
+        print(f"[Backend] Last.fm returned {len(lastfm_tracks)} tracks.")
 
         if not lastfm_tracks:
-            raise HTTPException(status_code=404, detail="Could not generate recommendations from Last.fm.")
+            print("[Backend] No tracks from Last.fm, trying fallback...")
+            # Fallback: try with just artist name
+            lastfm_tracks = recommender.recommend_bulk(
+                mode="artist",
+                track_name="",
+                artist_name=request.artist_name,
+                limit=request.num_recommendations
+            )
+            
+        if not lastfm_tracks:
+            raise HTTPException(status_code=404, detail="Could not generate recommendations from Last.fm. Try different track/artist names.")
 
         # 2. Enrich the recommendations with Spotify data
         spotify_recommendations = []
-        for track in lastfm_tracks:
-            artist = track.get('artist', {}).get('name', 'Unknown Artist')
-            track_name = track.get('name', 'Unknown Track')
-
-            # Search on Spotify to get ID, album art, etc.
-            # Search on Spotify to get ID, album art, etc.
-            spotify_info = search_track_on_spotify(track_name, artist, access_token=get_spotify_access_token_for_sdk())
-            print(f"[Backend] Spotify search for '{track_name}' by '{artist}' returned: {spotify_info is not None}") # <-- LOG 3
-
-            if spotify_info and spotify_info.get('id'):
-                # Get album cover from Spotify's response if available
-                album_cover_url = "https://i.scdn.co/image/ab67616d0000b273b44de2c935f87a4734a09153" # Default
-                if spotify_info.get('album', {}).get('images'):
-                    album_cover_url = spotify_info['album']['images'][0]['url']
-
-                preview_url = get_track_preview_url(spotify_info['id'], access_token=get_spotify_access_token_for_sdk())
-                spotify_recommendations.append({
-                    "id": spotify_info['id'],
-                    "name": track_name,
-                    "artist": artist,
-                    "album_cover_url": album_cover_url,
-                    "uri": spotify_info['uri'], # Add URI here
-                    "preview_url": preview_url, # Add preview URL here
-                    "seed_track_name": request.track_name, # Add seed info
-                    "seed_artist_name": request.artist_name # Add seed info
-                })
+        access_token = get_spotify_access_token_for_sdk()
         
-        print(f"[Backend] Final Spotify recommendations count: {len(spotify_recommendations)}") # <-- LOG 4
+        for track in lastfm_tracks:
+            try:
+                artist = track.get('artist', {})
+                if isinstance(artist, dict):
+                    artist_name = artist.get('name', 'Unknown Artist')
+                else:
+                    artist_name = str(artist) if artist else 'Unknown Artist'
+                    
+                track_name = track.get('name', 'Unknown Track')
+
+                # Search on Spotify
+                spotify_info = search_track_on_spotify(track_name, artist_name, access_token=access_token)
+                print(f"[Backend] Spotify search for '{track_name}' by '{artist_name}': {spotify_info is not None}")
+
+                if spotify_info and spotify_info.get('id'):
+                    # Get album cover from Spotify's response if available
+                    album_cover_url = "https://i.scdn.co/image/ab67616d0000b273b44de2c935f87a4734a09153"  # Default
+                    if spotify_info.get('album', {}).get('images') and len(spotify_info['album']['images']) > 0:
+                        album_cover_url = spotify_info['album']['images'][0]['url']
+
+                    preview_url = None
+                    try:
+                        preview_url = get_track_preview_url(spotify_info['id'], access_token=access_token)
+                    except Exception as e:
+                        print(f"[Backend] Could not get preview for {track_name}: {e}")
+                        
+                    spotify_recommendations.append({
+                        "id": spotify_info['id'],
+                        "name": track_name,
+                        "artist": artist_name,
+                        "album_cover_url": album_cover_url,
+                        "uri": spotify_info['uri'],
+                        "preview_url": preview_url,
+                        "seed_track_name": request.track_name,
+                        "seed_artist_name": request.artist_name
+                    })
+                else:
+                    print(f"[Backend] Could not find '{track_name}' by '{artist_name}' on Spotify")
+                    
+            except Exception as e:
+                print(f"[Backend] Error processing track {track}: {e}")
+                continue
+        
+        print(f"[Backend] Final Spotify recommendations count: {len(spotify_recommendations)}")
 
         # Limit the number of results as requested
         final_recommendations = spotify_recommendations[:request.num_recommendations]
 
         if not final_recommendations:
-            raise HTTPException(status_code=404, detail="Could find the recommended tracks on Spotify.")
+            raise HTTPException(status_code=404, detail="Could not find any of the recommended tracks on Spotify. Try different search terms.")
 
         return {"recommendations": final_recommendations}
 
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
     except Exception as e:
-        print(f"An error occurred: {e}") # Log the error for debugging
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"[Backend] Unexpected error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 @app.post("/feedback")
 def post_feedback(request: FeedbackRequest):
