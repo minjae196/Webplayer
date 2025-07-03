@@ -1,5 +1,9 @@
 // Get configuration from backend
-let CONFIG = {};
+let CONFIG = {
+    spotify_client_id: 'd28df89507ca47bebaa9385ebb546e92',  // Will be overridden by backend config
+    redirect_uri: 'http://localhost:8000/callback',
+    scopes: 'streaming user-read-email user-read-private user-modify-playback-state user-read-playback-state'
+};
 
 // Global variables
 let spotifyPlayer = null;
@@ -22,18 +26,20 @@ let isShuffling = false;
 let userSelectedMode = null; // 'premium' or 'general'
 let currentUser = null; // Store user info
 
-// Initialize configuration
+// Initialize configuration from backend
 async function initializeConfig() {
     try {
         const response = await fetch('/config');
         if (response.ok) {
-            CONFIG = await response.json();
-            console.log('Configuration loaded:', CONFIG);
+            const backendConfig = await response.json();
+            CONFIG = { ...CONFIG, ...backendConfig };
+            console.log('Configuration loaded from backend:', CONFIG);
         } else {
-            console.error('Failed to load configuration');
+            console.warn('Failed to load backend configuration, using defaults');
         }
     } catch (error) {
         console.error('Error loading configuration:', error);
+        console.warn('Using default configuration');
     }
 }
 
@@ -943,6 +949,12 @@ window.logoutUser = function() {
         window.location.href = '/logout';
     }
 };
+
+// Redirect to Spotify login with proper configuration
+function redirectToSpotifyLogin() {
+    const authUrl = `https://accounts.spotify.com/authorize?client_id=${CONFIG.spotify_client_id}&response_type=code&redirect_uri=${encodeURIComponent(CONFIG.redirect_uri)}&scope=${encodeURIComponent(CONFIG.scopes)}`;
+    window.location.href = authUrl;
+}
 
 // Check if returning from Spotify login
 function checkForLoginReturn() {
