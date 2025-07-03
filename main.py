@@ -1,19 +1,39 @@
+import os
+from dotenv import load_dotenv
+
+# 환경변수 먼저 로드
+load_dotenv()
+
+# 환경변수를 직접 가져오기 (import 순서 문제 해결)
+LASTFM_API_KEY = os.getenv("LASTFM_API_KEY")
+SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
+SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
+SPOTIPY_REDIRECT_URI = os.getenv("SPOTIPY_REDIRECT_URI", "http://localhost:8000/callback")
+SPOTIPY_SCOPE = "user-read-playback-state user-modify-playback-state user-read-currently-playing app-remote-control streaming user-read-email user-read-private"
+
+# Render 배포 시 동적으로 URL 설정
+if os.getenv("RENDER"):
+    # Render 환경에서는 RENDER_EXTERNAL_URL 사용
+    base_url = os.getenv("RENDER_EXTERNAL_URL", "https://your-app-name.onrender.com")
+    SPOTIPY_REDIRECT_URI = f"{base_url}/callback"
+else:
+    # 로컬 개발 환경
+    SPOTIPY_REDIRECT_URI = os.getenv("SPOTIPY_REDIRECT_URI", "http://localhost:8000/callback")
+
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import RedirectResponse, JSONResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-import os
 
-# Local module imports
+# Local module imports (환경변수 로드 후에 import)
 from lastfm_client import LastFMClient
 from recommender import Recommender
 from bandit.thompson_sampling import ThompsonSampling
 from spotify_player import search_track_on_spotify
 from spotify_auth import SpotifyAuthManager
-from config import SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIPY_REDIRECT_URI, SPOTIPY_SCOPE
 
-# Initialize SpotifyAuthManager using variables from config.py
+# Initialize SpotifyAuthManager using variables we just loaded
 spotify_auth_manager = SpotifyAuthManager(
     client_id=SPOTIFY_CLIENT_ID,
     client_secret=SPOTIFY_CLIENT_SECRET,
@@ -518,6 +538,8 @@ def get_playlists():
     Returns the user's playlists based on feedback.
     """
     return user_playlists
+
+@app.post("/remove_local_playlist_track")
 async def remove_local_playlist_track(delete_request: DeleteTrackRequest):
     playlist_id = delete_request.playlist_id
     track_id = delete_request.track_id
