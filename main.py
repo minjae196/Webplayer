@@ -324,6 +324,90 @@ async def user_profile_endpoint(request: Request):
     
     return user_profile
 
+# --- Missing Playlists Endpoint ---
+@app.get("/playlists")
+async def get_playlists(request: Request):
+    """Get user's local playlists"""
+    user_id = get_user_from_request(request)
+    if not user_id:
+        # Return empty playlists for non-authenticated users
+        return {str(i): [] for i in range(6)}
+    
+    user_data_obj = get_or_create_user_data(user_id)
+    return user_data_obj["playlists"]
+
+# --- Missing Reset Bandit Endpoint ---
+@app.post("/reset_bandit")
+async def reset_bandit(request: Request):
+    """Reset the bandit algorithm scores"""
+    user_id = get_user_from_request(request)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="User not authenticated")
+    
+    user_data_obj = get_or_create_user_data(user_id)
+    # Reset the bandit algorithm
+    user_data_obj["recommender"] = Recommender(LastFMClient(), ThompsonSampling())
+    
+    return {"message": "Bandit scores have been reset successfully"}
+
+# --- Missing Playlist Management Endpoints ---
+@app.post("/remove_local_playlist_track")
+async def remove_local_playlist_track(request: Request, delete_request: DeleteTrackRequest):
+    """Remove track from local playlist"""
+    user_id = get_user_from_request(request)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="User not authenticated")
+    
+    user_data_obj = get_or_create_user_data(user_id)
+    playlists = user_data_obj["playlists"]
+    
+    playlist_id = delete_request.playlist_id
+    track_id = delete_request.track_id
+
+    if playlist_id not in playlists:
+        raise HTTPException(status_code=404, detail="Playlist not found")
+
+    initial_len = len(playlists[playlist_id])
+    playlists[playlist_id] = [track for track in playlists[playlist_id] 
+                             if (isinstance(track, dict) and track.get("id") != track_id) or 
+                                (isinstance(track, str) and track != track_id)]
+
+    if len(playlists[playlist_id]) < initial_len:
+        return {"message": "Track removed successfully from local playlist"}
+    else:
+        raise HTTPException(status_code=404, detail="Track not found in local playlist")
+
+@app.post("/add_track_to_local_playlist")
+async def add_track_to_local_playlist(request: Request, add_request: AddTrackRequest):
+    """Add track to local playlist"""
+    user_id = get_user_from_request(request)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="User not authenticated")
+    
+    user_data_obj = get_or_create_user_data(user_id)
+    playlists = user_data_obj["playlists"]
+    
+    playlist_id = add_request.playlist_id
+    track = add_request.track
+
+    if playlist_id not in playlists:
+        raise HTTPException(status_code=404, detail="Playlist not found")
+
+    # Prevent duplicate tracks
+    track_id = track.get("id") if isinstance(track, dict) else track
+    existing_track_ids = []
+    for existing_track in playlists[playlist_id]:
+        if isinstance(existing_track, dict):
+            existing_track_ids.append(existing_track.get("id"))
+        else:
+            existing_track_ids.append(existing_track)
+    
+    if track_id in existing_track_ids:
+        return {"message": "Track already exists in local playlist"}
+
+    playlists[playlist_id].append(track)
+    return {"message": "Track added successfully to local playlist"}
+
 # --- API Endpoints ---
 @app.post("/recommendations")
 def get_recommendations_api(request: Request, recommend_request: RecommendRequest):
@@ -394,12 +478,7 @@ def get_recommendations_api(request: Request, recommend_request: RecommendReques
                     if spotify_info.get('album', {}).get('images') and len(spotify_info['album']['images']) > 0:
                         album_cover_url = spotify_info['album']['images'][0]['url']
 
-                    preview_url = None
-                    try:
-                        from spotify_player import get_track_preview_url
-                        preview_url = get_track_preview_url(spotify_info['id'], access_token=access_token)
-                    except Exception as e:
-                        print(f"[Backend] Could not get preview for {track_name}: {e}")
+                    preview_url = spotify_info.get('preview_url')  # Get preview URL directly from Spotify
                         
                     spotify_recommendations.append({
                         "id": spotify_info['id'],
@@ -461,16 +540,20 @@ def post_feedback(request: Request, feedback_request: FeedbackRequest):
         if feedback_request.track_info:
             track_info = feedback_request.track_info.copy()
             track_info["rating"] = feedback_request.rating
-        else:
-            track_info = {
-                "id": feedback_request.track_id,
-                "name": "Unknown Track",
-                "artist": "Unknown Artist", 
-                "album_cover_url": "https://via.placeholder.com/60x60?text=♪",
-                "rating": feedback_request.rating,
-                "seed_track_name": feedback_request.seed_track_name,
-                "seed_artist_name": feedback_request.seed_artist_name
-            }
+            
+            # Check for duplicates
+            track_id = track_info.get("id")
+            existing_track_ids = []
+            for existing_track in playlists[rating_key]:
+                if isinstance(existing_track, dict):
+                    existing_track_ids.append(existing_track.get("id"))
+                else:
+                    existing_track_ids.append(existing_track)
+            
+            if track_id not in existing_track_ids:
+                playlists[rating_key].append(track_info)
+        
+        return {"message": "Feedback processed successfully"}
     except Exception as e:
         print(f"[Backend] Error in post_feedback: {e}")
         raise HTTPException(status_code=500, detail=str(e))
