@@ -28,9 +28,16 @@ function formatTime(ms) {
     return minutes + ':' + (seconds < 10 ? '0' : '') + seconds;
 }
 
-// Define this function at the global scope for Spotify SDK
+// Define this function at the global scope for Spotify SDK - but only initialize when needed
 window.onSpotifyWebPlaybackSDKReady = () => {
     console.log('Spotify Web Playback SDK is ready!');
+    
+    // Only initialize if user is premium
+    if (!isPremiumUser) {
+        console.log('General user mode - Spotify Player not needed');
+        return;
+    }
+    
     const token = localStorage.getItem('spotify_access_token');
     if (!token) {
         console.warn('Spotify access token not found in localStorage. Player will not initialize.');
@@ -995,6 +1002,11 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log('=== PREMIUM USER SELECTED ===');
             isPremiumUser = true;
             
+            // Spotify SDK 로드
+            if (typeof window.loadSpotifySDK === 'function') {
+                window.loadSpotifySDK();
+            }
+            
             // 사용자 선택 화면 숨기기
             userTypeSelection.classList.add('d-none');
             userTypeSelection.style.display = 'none';
@@ -1025,9 +1037,13 @@ document.addEventListener('DOMContentLoaded', () => {
             spotifyLoginSection.classList.add('d-none');
             spotifyLoginSection.style.display = 'none';
             
-            // 기본 컨트롤 활성화
+            // 기본 컨트롤 활성화 (하지만 Spotify Player는 초기화하지 않음)
             togglePlayerControls(true);
-            console.log('General User mode activated - ready for preview playback');
+            
+            // localStorage에서 Spotify 관련 정보 제거
+            localStorage.removeItem('spotify_access_token');
+            
+            console.log('General User mode activated - ready for preview playback only');
         });
     }
 
