@@ -50,7 +50,7 @@ function showError(message) {
     if (errorElement) {
         errorElement.textContent = message;
         errorElement.classList.remove('d-none');
-        setTimeout(() => errorElement.classList.add('d-none'), 5000);
+        setTimeout(() => errorElement.classList.add('d-none'), 3000);
     }
     console.error('Error:', message);
 }
@@ -62,155 +62,7 @@ function showLoader(show = true) {
     }
 }
 
-// Load Spotify SDK
-function loadSpotifySDK() {
-    return new Promise((resolve, reject) => {
-        if (spotifySDKLoaded) {
-            resolve();
-            return;
-        }
-        
-        // Check if SDK script already exists
-        if (document.querySelector('script[src*="spotify-player.js"]')) {
-            spotifySDKLoaded = true;
-            resolve();
-            return;
-        }
-        
-        console.log('Loading Spotify Web Playback SDK...');
-        const script = document.createElement('script');
-        script.src = 'https://sdk.scdn.co/spotify-player.js';
-        script.async = true;
-        
-        script.onload = () => {
-            console.log('Spotify SDK script loaded');
-            spotifySDKLoaded = true;
-            resolve();
-        };
-        
-        script.onerror = (error) => {
-            console.error('Failed to load Spotify SDK:', error);
-            reject(error);
-        };
-        
-        document.head.appendChild(script);
-    });
-}
-
-// Spotify Web Playback SDK Ready
-window.onSpotifyWebPlaybackSDKReady = () => {
-    console.log('Spotify Web Playback SDK is ready!');
-    
-    if (userSelectedMode !== 'premium') {
-        console.log('Not premium mode - SDK not needed');
-        return;
-    }
-    
-    initializeSpotifyPlayer();
-};
-
-async function initializeSpotifyPlayer() {
-    try {
-        console.log('Initializing Spotify Player...');
-        
-        // Get token first
-        const tokenResponse = await fetch('/spotify_sdk_token');
-        if (!tokenResponse.ok) {
-            throw new Error('Failed to get Spotify token');
-        }
-        
-        const tokenData = await tokenResponse.json();
-        const token = tokenData.access_token;
-        
-        if (!token) {
-            throw new Error('No access token available');
-        }
-        
-        console.log('Token available, creating player...');
-
-        // Create player
-        spotifyPlayer = new Spotify.Player({
-            name: 'Music Recommender Web Player',
-            getOAuthToken: async cb => {
-                try {
-                    const response = await fetch('/spotify_sdk_token');
-                    if (response.ok) {
-                        const data = await response.json();
-                        console.log('Token refreshed for player');
-                        cb(data.access_token);
-                    } else {
-                        console.error('Failed to refresh token');
-                        cb('');
-                    }
-                } catch (error) {
-                    console.error('Error refreshing token:', error);
-                    cb('');
-                }
-            },
-            volume: 0.5
-        });
-
-        // Error listeners
-        spotifyPlayer.addListener('initialization_error', ({ message }) => {
-            console.error('Spotify initialization error:', message);
-            showError('Spotify Player initialization failed. Try refreshing the page.');
-        });
-
-        spotifyPlayer.addListener('authentication_error', ({ message }) => {
-            console.error('Spotify authentication error:', message);
-            showError('Spotify authentication failed. Please log out and log in again.');
-        });
-
-        spotifyPlayer.addListener('account_error', ({ message }) => {
-            console.error('Spotify account error:', message);
-            showError('Premium account required for full playback. Using preview mode instead.');
-            // Fallback to preview mode
-            userSelectedMode = 'general';
-        });
-
-        spotifyPlayer.addListener('playback_error', ({ message }) => {
-            console.error('Spotify playback error:', message);
-            // Don't show error, try preview instead
-        });
-
-        // Success listeners
-        spotifyPlayer.addListener('ready', ({ device_id }) => {
-            console.log('✅ Spotify Player ready! Device ID:', device_id);
-            activeDeviceId = device_id;
-            showMiniPlayer(true);
-            
-            // Show success message
-            showSuccessMessage('🎵 Spotify Premium Player ready! Click any song to play full tracks.');
-        });
-
-        spotifyPlayer.addListener('not_ready', ({ device_id }) => {
-            console.log('Spotify Player offline:', device_id);
-            activeDeviceId = null;
-        });
-
-        spotifyPlayer.addListener('player_state_changed', (state) => {
-            if (!state) return;
-            updatePlayerState(state);
-        });
-
-        // Connect the player
-        const connected = await spotifyPlayer.connect();
-        console.log('Player connection result:', connected);
-        
-        if (!connected) {
-            throw new Error('Failed to connect Spotify Player');
-        }
-        
-    } catch (error) {
-        console.error('Error initializing Spotify Player:', error);
-        showError('Failed to initialize Spotify Player. Using preview mode instead.');
-        // Fallback to preview mode
-        userSelectedMode = 'general';
-    }
-}
-
 function showSuccessMessage(message) {
-    // Create and show success alert
     const alertDiv = document.createElement('div');
     alertDiv.className = 'alert alert-success alert-dismissible fade show position-fixed';
     alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999; max-width: 400px;';
@@ -220,12 +72,119 @@ function showSuccessMessage(message) {
     `;
     document.body.appendChild(alertDiv);
     
-    // Auto remove after 5 seconds
     setTimeout(() => {
         if (alertDiv.parentNode) {
             alertDiv.remove();
         }
     }, 5000);
+}
+
+// Load Spotify SDK
+function loadSpotifySDK() {
+    return new Promise((resolve, reject) => {
+        console.log('🎵 Loading Spotify SDK...');
+        
+        if (spotifySDKLoaded) {
+            resolve();
+            return;
+        }
+        
+        const existingScript = document.querySelector('script[src*="spotify-player.js"]');
+        if (existingScript) {
+            spotifySDKLoaded = true;
+            resolve();
+            return;
+        }
+        
+        const script = document.createElement('script');
+        script.src = 'https://sdk.scdn.co/spotify-player.js';
+        script.async = true;
+        
+        script.onload = () => {
+            console.log('✅ Spotify SDK loaded');
+            spotifySDKLoaded = true;
+            setTimeout(resolve, 1000);
+        };
+        
+        script.onerror = reject;
+        document.head.appendChild(script);
+    });
+}
+
+// Spotify SDK Ready
+window.onSpotifyWebPlaybackSDKReady = () => {
+    console.log('🎉 Spotify SDK Ready!');
+    if (userSelectedMode === 'premium' && currentUser?.product === 'premium') {
+        initializeSpotifyPlayer();
+    }
+};
+
+async function initializeSpotifyPlayer() {
+    try {
+        console.log('🎛️ Initializing Spotify Player...');
+        
+        if (typeof window.Spotify === 'undefined') {
+            throw new Error('Spotify SDK not available');
+        }
+        
+        const tokenResponse = await fetch('/spotify_sdk_token');
+        if (!tokenResponse.ok) throw new Error('Failed to get token');
+        
+        const tokenData = await tokenResponse.json();
+        if (!tokenData.access_token) throw new Error('No access token');
+        
+        spotifyPlayer = new window.Spotify.Player({
+            name: 'Music Recommender Player',
+            getOAuthToken: async cb => {
+                try {
+                    const response = await fetch('/spotify_sdk_token');
+                    const data = await response.json();
+                    cb(response.ok ? data.access_token : '');
+                } catch (error) {
+                    cb('');
+                }
+            },
+            volume: 0.5
+        });
+
+        // Error listeners
+        spotifyPlayer.addListener('initialization_error', ({ message }) => {
+            console.error('Spotify init error:', message);
+        });
+
+        spotifyPlayer.addListener('authentication_error', ({ message }) => {
+            console.error('Spotify auth error:', message);
+        });
+
+        spotifyPlayer.addListener('account_error', ({ message }) => {
+            console.error('Spotify account error:', message);
+            userSelectedMode = 'general';
+        });
+
+        // Success listeners
+        spotifyPlayer.addListener('ready', ({ device_id }) => {
+            console.log('✅ Spotify Player ready! Device ID:', device_id);
+            activeDeviceId = device_id;
+            showMiniPlayer(true);
+            showSuccessMessage('🎵 Spotify Premium Player ready!');
+        });
+
+        spotifyPlayer.addListener('not_ready', ({ device_id }) => {
+            console.log('Spotify Player offline:', device_id);
+            activeDeviceId = null;
+        });
+
+        spotifyPlayer.addListener('player_state_changed', (state) => {
+            if (state) updatePlayerState(state);
+        });
+
+        const connected = await spotifyPlayer.connect();
+        console.log('Player connected:', connected);
+        
+    } catch (error) {
+        console.error('Failed to initialize Spotify Player:', error);
+        userSelectedMode = 'general';
+    }
 }
 
 // Player functions
@@ -240,7 +199,6 @@ function updatePlayerState(state) {
     const { current_track: track } = state.track_window;
     if (!track) return;
 
-    // Update track info
     const albumArt = document.getElementById('mini-player-album-art');
     const trackName = document.getElementById('mini-player-track-name');
     const artistName = document.getElementById('mini-player-artist-name');
@@ -257,7 +215,6 @@ function updatePlayerState(state) {
             '<i class="bi bi-pause-fill"></i>';
     }
 
-    // Update seek bar
     updateSeekBar(state.position, state.duration);
     
     if (!state.paused) {
@@ -302,13 +259,13 @@ function stopPlaybackUpdate() {
     }
 }
 
-// Audio Preview functions for non-premium users
+// Audio Preview functions - IMPROVED
 function playPreview(previewUrl, track) {
-    console.log('Attempting to play preview for:', track.name, 'Preview URL:', previewUrl);
+    console.log('🎧 Attempting preview for:', track.name, '| URL:', previewUrl);
     
-    if (!previewUrl) {
-        console.warn('No preview URL available for:', track.name);
-        showError(`No preview available for "${track.name}". This track cannot be previewed.`);
+    if (!previewUrl || previewUrl === 'null' || previewUrl === null) {
+        console.warn('❌ No preview available for:', track.name);
+        showError(`"${track.name}" has no preview available. Try another track.`);
         return;
     }
 
@@ -322,7 +279,7 @@ function playPreview(previewUrl, track) {
         audioPreview.volume = 0.5;
 
         audioPreview.addEventListener('loadedmetadata', () => {
-            console.log('Preview loaded for:', track.name);
+            console.log('✅ Preview loaded:', track.name);
             updatePreviewPlayer(track, audioPreview.duration * 1000);
         });
 
@@ -333,7 +290,7 @@ function playPreview(previewUrl, track) {
         });
 
         audioPreview.addEventListener('ended', () => {
-            console.log('Preview ended for:', track.name);
+            console.log('🏁 Preview ended:', track.name);
             const playButton = document.getElementById('mini-player-play');
             if (playButton) {
                 playButton.innerHTML = '<i class="bi bi-play-fill"></i>';
@@ -342,25 +299,25 @@ function playPreview(previewUrl, track) {
         });
 
         audioPreview.addEventListener('error', (e) => {
-            console.error('Preview playback error:', e);
-            showError(`Failed to play preview for "${track.name}"`);
+            console.error('❌ Preview error:', e);
+            showError(`Preview failed for "${track.name}"`);
         });
 
         audioPreview.play().then(() => {
-            console.log('✅ Preview playing for:', track.name);
+            console.log('✅ Preview playing:', track.name);
             const playButton = document.getElementById('mini-player-play');
             if (playButton) {
                 playButton.innerHTML = '<i class="bi bi-pause-fill"></i>';
             }
             showMiniPlayer(true);
         }).catch(error => {
-            console.error('Error playing preview:', error);
-            showError(`Failed to play preview for "${track.name}"`);
+            console.error('❌ Preview play error:', error);
+            showError(`Failed to play "${track.name}"`);
         });
         
     } catch (error) {
-        console.error('Error setting up preview:', error);
-        showError(`Error playing preview for "${track.name}"`);
+        console.error('❌ Preview setup error:', error);
+        showError(`Error with "${track.name}"`);
     }
 }
 
@@ -376,23 +333,33 @@ function updatePreviewPlayer(track, duration) {
     updateSeekBar(0, duration);
 }
 
-// Play track function - IMPROVED
+// MAIN PLAY FUNCTION - COMPLETELY REWRITTEN
 async function playTrack(trackUri, track, playlist = [], index = -1) {
-    console.log('🎵 Playing track:', track.name, 'by', track.artist);
-    console.log('User mode:', userSelectedMode, 'Premium account:', currentUser?.product);
-    console.log('Track URI:', trackUri);
+    console.log('🎵 === PLAY TRACK ===');
+    console.log('Track:', track.name, 'by', track.artist);
+    console.log('User mode:', userSelectedMode);
+    console.log('User product:', currentUser?.product);
+    console.log('Has Player:', !!spotifyPlayer);
+    console.log('Has Device:', !!activeDeviceId);
     console.log('Preview URL:', track.preview_url);
     
     currentPlaylist = playlist;
     currentPlaylistIndex = index;
     
-    // Try Spotify Premium playback first if user has premium
-    if (userSelectedMode === 'premium' && currentUser?.product === 'premium' && spotifyPlayer && activeDeviceId) {
-        console.log('Attempting Spotify Premium playback...');
+    // Check if we should try Spotify Premium
+    const shouldTryPremium = (
+        userSelectedMode === 'premium' && 
+        currentUser?.product === 'premium' && 
+        spotifyPlayer && 
+        activeDeviceId
+    );
+    
+    if (shouldTryPremium) {
+        console.log('🎵 Attempting Spotify Premium playback...');
         
         try {
             const tokenResponse = await fetch('/spotify_sdk_token');
-            if (!tokenResponse.ok) throw new Error('Failed to get token');
+            if (!tokenResponse.ok) throw new Error('Token fetch failed');
             
             const tokenData = await tokenResponse.json();
             
@@ -405,22 +372,27 @@ async function playTrack(trackUri, track, playlist = [], index = -1) {
                 body: JSON.stringify({ uris: [trackUri] })
             });
 
-            if (response.ok) {
-                console.log('✅ Spotify Premium playback started');
-                return;
+            if (response.ok || response.status === 204) {
+                console.log('✅ Spotify Premium playback started!');
+                return; // Success!
             } else {
-                const errorData = await response.text();
-                console.error('Spotify API error:', response.status, errorData);
-                throw new Error(`Spotify API error: ${response.status}`);
+                const errorText = await response.text();
+                console.error('❌ Spotify API error:', response.status, errorText);
+                throw new Error(`API error: ${response.status}`);
             }
         } catch (error) {
-            console.error('❌ Spotify Premium playback failed:', error);
-            console.log('Falling back to preview mode...');
+            console.error('❌ Premium playback failed:', error);
+            console.log('🔄 Falling back to preview...');
         }
+    } else {
+        console.log('⚠️ Premium conditions not met, using preview');
+        console.log('- Premium mode:', userSelectedMode === 'premium');
+        console.log('- Premium account:', currentUser?.product === 'premium');
+        console.log('- Player ready:', !!spotifyPlayer);
+        console.log('- Device ready:', !!activeDeviceId);
     }
     
-    // Fallback to preview playback
-    console.log('Using preview playback...');
+    // Fallback: Use preview
     playPreview(track.preview_url, track);
 }
 
@@ -482,7 +454,7 @@ async function checkUserLoginStatus() {
                     console.log('User profile loaded:', currentUser);
                 }
             } catch (e) {
-                console.log('Could not fetch profile, using basic info');
+                console.log('Could not fetch profile');
             }
             
             return true;
@@ -524,15 +496,14 @@ function updateUserInfoDisplay() {
             productInfo.innerHTML = `
                 <i class="bi bi-exclamation-triangle"></i>
                 <strong>Notice:</strong> You selected Premium Mode but have a Spotify Free account. 
-                You'll get preview playback only. 
-                <a href="https://www.spotify.com/premium/" target="_blank" class="alert-link">Upgrade to Premium</a>
+                You'll get preview playback only.
             `;
             productInfo.classList.remove('d-none');
         } else if (userSelectedMode === 'premium' && currentUser.product === 'premium') {
             productInfo.className = 'alert alert-success mb-4';
             productInfo.innerHTML = `
                 <i class="bi bi-check-circle"></i>
-                <strong>Great!</strong> Premium Mode activated with your Spotify Premium account!
+                <strong>Great!</strong> Premium Mode with Spotify Premium account!
             `;
             productInfo.classList.remove('d-none');
         } else {
@@ -591,14 +562,15 @@ function displayRecommendations(tracks) {
         resultsContainer.innerHTML += cardHTML;
     });
 
-    // Add event listeners
     addTrackCardListeners();
 }
 
 function createTrackCard(track, index) {
     // Check if preview is available
-    const hasPreview = track.preview_url && track.preview_url !== null;
-    const previewBadge = hasPreview ? '' : '<span class="badge bg-warning text-dark small">No Preview</span>';
+    const hasPreview = track.preview_url && track.preview_url !== null && track.preview_url !== 'null';
+    const previewBadge = hasPreview ? 
+        '<span class="badge bg-success text-white small">Preview Available</span>' : 
+        '<span class="badge bg-warning text-dark small">No Preview</span>';
     
     return `
         <div class="col-lg-3 col-md-4 col-sm-6">
@@ -608,7 +580,9 @@ function createTrackCard(track, index) {
                  data-track-index="${index}">
                 <div class="position-relative">
                     <img src="${track.album_cover_url}" class="card-img-top" alt="${track.name}">
-                    ${previewBadge}
+                    <div class="position-absolute top-0 end-0 m-2">
+                        ${previewBadge}
+                    </div>
                 </div>
                 <div class="card-body">
                     <h5 class="card-title">${track.name}</h5>
@@ -669,7 +643,6 @@ async function sendFeedback(track, rating, cardElement) {
 
         if (!response.ok) throw new Error('Failed to send feedback');
 
-        // Replace card with new recommendation
         const newTrack = getNewRecommendationFromPool();
         if (newTrack) {
             replaceTrackCard(cardElement, newTrack);
@@ -678,7 +651,6 @@ async function sendFeedback(track, rating, cardElement) {
             setTimeout(() => cardElement.remove(), 500);
         }
         
-        // Refresh playlists
         fetchPlaylists();
         
     } catch (error) {
@@ -706,159 +678,6 @@ function replaceTrackCard(cardElement, newTrack) {
         addTrackCardListeners();
         container.style.opacity = '1';
     }, 300);
-}
-
-// Playlists
-async function fetchPlaylists() {
-    try {
-        const response = await fetch('/playlists');
-        if (!response.ok) {
-            console.warn('Failed to fetch playlists, using empty playlists');
-            return;
-        }
-        
-        const playlists = await response.json();
-        displayPlaylists(playlists);
-    } catch (error) {
-        console.error('Error fetching playlists:', error);
-    }
-}
-
-function displayPlaylists(playlists) {
-    for (let i = 0; i <= 5; i++) {
-        const tabButton = document.getElementById(`playlist-${i}-tab`);
-        const tabContent = document.getElementById(`playlist-${i}`);
-        
-        if (!tabButton || !tabContent) continue;
-        
-        const tracks = playlists[i.toString()] || [];
-        
-        // Update tab title
-        if (i === 0) {
-            tabButton.textContent = `Skipped (${tracks.length})`;
-        } else {
-            const stars = '⭐'.repeat(i);
-            tabButton.textContent = `${stars} Rating ${i} (${tracks.length})`;
-        }
-        
-        // Update content
-        if (tracks.length === 0) {
-            tabContent.innerHTML = '<p class="text-muted text-center p-4">No tracks yet</p>';
-        } else {
-            tabContent.innerHTML = tracks.map((track, index) => 
-                createPlaylistItem(track, i, index)
-            ).join('');
-        }
-    }
-    
-    addPlaylistListeners();
-}
-
-function createPlaylistItem(track, playlistId, index) {
-    const trackName = track.name || 'Unknown Track';
-    const artistName = track.artist || 'Unknown Artist';
-    const albumCover = track.album_cover_url || 'https://via.placeholder.com/60x60?text=♪';
-    const rating = track.rating || 0;
-    
-    return `
-        <div class="playlist-item" 
-             data-track-uri="${track.uri || ''}"
-             data-track-index="${index}"
-             data-playlist-id="${playlistId}">
-            <div class="d-flex align-items-center">
-                <img src="${albumCover}" alt="Album" class="album-art me-3">
-                <div class="flex-grow-1">
-                    <h6 class="mb-1">${trackName}</h6>
-                    <p class="mb-1 text-muted">${artistName}</p>
-                    <small class="text-success">Rating: ${rating}/5</small>
-                </div>
-                <div class="d-flex gap-2">
-                    <button class="btn btn-success btn-sm play-playlist-btn">
-                        <i class="bi bi-play-fill"></i>
-                    </button>
-                    <button class="btn btn-outline-danger btn-sm remove-playlist-btn" 
-                            data-track-id="${track.id}">
-                        <i class="bi bi-trash"></i>
-                    </button>
-                </div>
-            </div>
-        </div>
-    `;
-}
-
-function addPlaylistListeners() {
-    // Play buttons
-    document.querySelectorAll('.play-playlist-btn').forEach(button => {
-        button.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const item = e.target.closest('.playlist-item');
-            const playlistId = item.dataset.playlistId;
-            const index = parseInt(item.dataset.trackIndex);
-            
-            playPlaylistTrack(playlistId, index);
-        });
-    });
-
-    // Remove buttons
-    document.querySelectorAll('.remove-playlist-btn').forEach(button => {
-        button.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            const trackId = e.target.dataset.trackId;
-            const item = e.target.closest('.playlist-item');
-            const playlistId = item.dataset.playlistId;
-            
-            await removeFromPlaylist(playlistId, trackId);
-        });
-    });
-}
-
-function playPlaylistTrack(playlistId, trackIndex) {
-    const tabContent = document.getElementById(`playlist-${playlistId}`);
-    if (!tabContent) return;
-    
-    const items = tabContent.querySelectorAll('.playlist-item');
-    const playlistTracks = Array.from(items).map(item => {
-        const img = item.querySelector('img');
-        const title = item.querySelector('h6');
-        const artist = item.querySelector('p');
-        
-        return {
-            id: item.dataset.trackId || '',
-            name: title ? title.textContent : 'Unknown',
-            artist: artist ? artist.textContent : 'Unknown',
-            album_cover_url: img ? img.src : '',
-            uri: item.dataset.trackUri || '',
-            preview_url: ''
-        };
-    });
-    
-    currentPlaylist = playlistTracks;
-    currentPlaylistIndex = trackIndex;
-    currentPlaylistId = playlistId;
-    
-    const track = playlistTracks[trackIndex];
-    if (track) {
-        playTrack(track.uri, track, playlistTracks, trackIndex);
-    }
-}
-
-async function removeFromPlaylist(playlistId, trackId) {
-    try {
-        const response = await fetch('/remove_local_playlist_track', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ playlist_id: playlistId, track_id: trackId })
-        });
-
-        if (response.ok) {
-            fetchPlaylists();
-        } else {
-            throw new Error('Failed to remove track');
-        }
-    } catch (error) {
-        console.error('Error removing track:', error);
-        showError('Failed to remove track from playlist');
-    }
 }
 
 // Navigation
@@ -917,7 +736,6 @@ function setupPlayerControls() {
         isShuffling = !isShuffling;
         shuffleButton.classList.toggle('btn-success', isShuffling);
         shuffleButton.classList.toggle('btn-outline-light', !isShuffling);
-        console.log('Shuffle mode:', isShuffling ? 'ON' : 'OFF');
     });
 
     volumeSlider?.addEventListener('input', (e) => {
@@ -948,10 +766,89 @@ function setupPlayerControls() {
     });
 }
 
+// Playlists (기본 구현)
+async function fetchPlaylists() {
+    try {
+        const response = await fetch('/playlists');
+        if (!response.ok) return;
+        const playlists = await response.json();
+        displayPlaylists(playlists);
+    } catch (error) {
+        console.error('Error fetching playlists:', error);
+    }
+}
+
+function displayPlaylists(playlists) {
+    for (let i = 0; i <= 5; i++) {
+        const tabButton = document.getElementById(`playlist-${i}-tab`);
+        const tabContent = document.getElementById(`playlist-${i}`);
+        
+        if (!tabButton || !tabContent) continue;
+        
+        const tracks = playlists[i.toString()] || [];
+        
+        if (i === 0) {
+            tabButton.textContent = `Skipped (${tracks.length})`;
+        } else {
+            const stars = '⭐'.repeat(i);
+            tabButton.textContent = `${stars} Rating ${i} (${tracks.length})`;
+        }
+        
+        if (tracks.length === 0) {
+            tabContent.innerHTML = '<p class="text-muted text-center p-4">No tracks yet</p>';
+        } else {
+            tabContent.innerHTML = tracks.map((track, index) => 
+                createPlaylistItem(track, i, index)
+            ).join('');
+        }
+    }
+}
+
+function createPlaylistItem(track, playlistId, index) {
+    const trackName = track.name || 'Unknown Track';
+    const artistName = track.artist || 'Unknown Artist';
+    const albumCover = track.album_cover_url || 'https://via.placeholder.com/60x60?text=♪';
+    const rating = track.rating || 0;
+    
+    return `
+        <div class="playlist-item mb-2 p-3" style="background: #333; border-radius: 8px;">
+            <div class="d-flex align-items-center">
+                <img src="${albumCover}" alt="Album" class="rounded me-3" style="width: 50px; height: 50px;">
+                <div class="flex-grow-1">
+                    <h6 class="mb-1 text-white">${trackName}</h6>
+                    <p class="mb-1 text-muted small">${artistName}</p>
+                    <small class="text-success">Rating: ${rating}/5</small>
+                </div>
+                <button class="btn btn-outline-danger btn-sm" onclick="removeFromPlaylist('${playlistId}', '${track.id}')">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+async function removeFromPlaylist(playlistId, trackId) {
+    try {
+        const response = await fetch('/remove_local_playlist_track', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ playlist_id: playlistId, track_id: trackId })
+        });
+
+        if (response.ok) {
+            fetchPlaylists();
+        }
+    } catch (error) {
+        console.error('Error removing track:', error);
+    }
+}
+
 // Welcome screen functions (global scope)
 window.selectUserMode = function(mode) {
     userSelectedMode = mode;
     localStorage.setItem('selectedUserMode', mode);
+    
+    console.log('🎯 User selected mode:', mode);
     
     document.getElementById('step-indicator').textContent = '2';
     document.getElementById('step-1').classList.add('d-none');
@@ -990,12 +887,11 @@ window.logoutUser = function() {
 // Load Spotify SDK for premium users
 window.loadSpotifySDK = function() {
     if (userSelectedMode === 'premium') {
-        console.log('Loading Spotify SDK for Premium user...');
+        console.log('🎵 Loading Spotify SDK for Premium user...');
         loadSpotifySDK().then(() => {
-            console.log('Spotify SDK loaded successfully');
+            console.log('✅ SDK loaded successfully');
         }).catch(error => {
-            console.error('Failed to load Spotify SDK:', error);
-            showError('Failed to load Spotify Player. Using preview mode.');
+            console.error('❌ Failed to load SDK:', error);
         });
     }
 };
@@ -1010,41 +906,66 @@ function showMainApp() {
     document.getElementById('main-app')?.classList.remove('d-none');
 }
 
-// Initialize app
+// Initialize app - FIXED
 async function initializeApp() {
-    console.log('Initializing Music Recommender App...');
+    console.log('🚀 Initializing Music Recommender App...');
     
     await initializeConfig();
     
     const isLoggedIn = await checkUserLoginStatus();
     
     if (isLoggedIn) {
-        console.log('User already logged in - checking for selected mode...');
+        console.log('✅ User already logged in - checking for selected mode...');
         
         const urlParams = new URLSearchParams(window.location.search);
         const storedMode = localStorage.getItem('selectedUserMode');
         
+        // FIXED: Check URL parameters and stored mode
         if (urlParams.get('mode')) {
             userSelectedMode = urlParams.get('mode');
             localStorage.setItem('selectedUserMode', userSelectedMode);
         } else if (storedMode) {
             userSelectedMode = storedMode;
+        } else {
+            // DEFAULT: If user has premium account, default to premium mode
+            if (currentUser?.product === 'premium') {
+                userSelectedMode = 'premium';
+                localStorage.setItem('selectedUserMode', 'premium');
+                console.log('🎯 Auto-selected Premium mode for Premium user');
+            } else {
+                userSelectedMode = 'general';
+                localStorage.setItem('selectedUserMode', 'general');
+                console.log('🎯 Auto-selected General mode for Free user');
+            }
         }
         
+        console.log('🎯 Final user mode:', userSelectedMode);
+        
         if (userSelectedMode) {
-            console.log('User mode:', userSelectedMode);
             showMainApp();
             updateUserInfoDisplay();
             
             // Load Spotify SDK for premium users
-            if (userSelectedMode === 'premium') {
-                console.log('Loading Spotify SDK for premium user...');
+            if (userSelectedMode === 'premium' && currentUser?.product === 'premium') {
+                console.log('🎵 Loading Spotify SDK for premium user...');
                 try {
                     await loadSpotifySDK();
-                    // SDK will initialize when ready via onSpotifyWebPlaybackSDKReady
+                    console.log('✅ SDK loading initiated');
+                    
+                    // Check if SDK is ready
+                    setTimeout(() => {
+                        if (typeof window.Spotify !== 'undefined') {
+                            console.log('✅ SDK ready, initializing player...');
+                            initializeSpotifyPlayer();
+                        } else {
+                            console.log('⏳ Waiting for SDK callback...');
+                        }
+                    }, 2000);
+                    
                 } catch (error) {
-                    console.error('Failed to load Spotify SDK:', error);
+                    console.error('❌ Failed to load Spotify SDK:', error);
                     showError('Failed to load Spotify Player. Using preview mode.');
+                    userSelectedMode = 'general';
                 }
             }
         } else {
@@ -1066,14 +987,21 @@ function checkForLoginReturn() {
             
             setTimeout(async () => {
                 await checkUserLoginStatus();
+                
+                // Set default mode if not set
+                if (!userSelectedMode) {
+                    userSelectedMode = currentUser?.product === 'premium' ? 'premium' : 'general';
+                    localStorage.setItem('selectedUserMode', userSelectedMode);
+                }
+                
                 showMainApp();
                 updateUserInfoDisplay();
                 
-                if (userSelectedMode === 'premium') {
+                if (userSelectedMode === 'premium' && currentUser?.product === 'premium') {
                     try {
                         await loadSpotifySDK();
                     } catch (error) {
-                        console.error('Failed to load Spotify SDK:', error);
+                        console.error('Failed to load SDK:', error);
                     }
                 }
             }, 2000);
@@ -1085,7 +1013,7 @@ function checkForLoginReturn() {
 
 // DOM Content Loaded
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('DOM Content Loaded');
+    console.log('📄 DOM Content Loaded');
     
     checkForLoginReturn();
     await initializeApp();
@@ -1121,7 +1049,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             const response = await fetch('/reset_bandit', { method: 'POST' });
             if (response.ok) {
-                showSuccessMessage('Algorithm scores reset successfully!');
+                showSuccessMessage('✅ Algorithm scores reset successfully!');
                 document.getElementById('results').innerHTML = '';
             } else {
                 throw new Error('Failed to reset scores');
