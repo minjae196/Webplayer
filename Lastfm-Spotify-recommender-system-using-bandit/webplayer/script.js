@@ -430,6 +430,8 @@ function updatePlaylistVisualFeedback() {
 }
 
 async function fetchAndSetUserType() {
+    // 사용자가 직접 선택할 때까지 자동 검사하지 않음
+    // 이 함수는 Premium User 버튼 클릭 시에만 호출됨
     try {
         const response = await fetch('/spotify_sdk_token');
         if (response.ok) {
@@ -448,8 +450,8 @@ async function fetchAndSetUserType() {
             if (appContent) appContent.classList.remove('d-none');
             togglePlayerControls(isPremiumUser);
         } else {
-            console.warn('Could not fetch Spotify SDK token, assuming general user or prompting login.');
-            isPremiumUser = false;
+            console.warn('Could not fetch Spotify SDK token, showing login section.');
+            isPremiumUser = true; // Premium user이지만 로그인 필요
             
             const spotifyLoginSection = document.getElementById('spotify-login-section');
             const userTypeSelection = document.getElementById('user-type-selection');
@@ -462,7 +464,7 @@ async function fetchAndSetUserType() {
         }
     } catch (error) {
         console.error('Error fetching user type:', error);
-        isPremiumUser = false;
+        isPremiumUser = true; // Premium user이지만 로그인 필요
         
         const spotifyLoginSection = document.getElementById('spotify-login-section');
         const userTypeSelection = document.getElementById('user-type-selection');
@@ -910,8 +912,8 @@ document.addEventListener('DOMContentLoaded', () => {
             isPremiumUser = true;
             userTypeSelection.classList.add('d-none');
             appContent.classList.remove('d-none');
-            spotifyLoginSection.classList.remove('d-none');
-            togglePlayerControls(false); // Will be enabled when player is ready
+            // Premium 사용자는 Spotify 토큰 확인 시도
+            fetchAndSetUserType();
         });
     }
 
@@ -922,6 +924,7 @@ document.addEventListener('DOMContentLoaded', () => {
             appContent.classList.remove('d-none');
             spotifyLoginSection.classList.add('d-none');
             togglePlayerControls(true); // Enable basic controls for preview playback
+            console.log('General User mode selected');
         });
     }
 
@@ -1004,15 +1007,16 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Initial display state: Hide app content until user type is determined
+    // Initial display state: Show user type selection
     if (appContent) appContent.classList.add('d-none');
+    if (userTypeSelection) userTypeSelection.classList.remove('d-none'); // 사용자 선택 화면 표시
     if (recommendationSection) recommendationSection.classList.remove('d-none');
     if (playlistsSection) playlistsSection.classList.add('d-none');
     if (showRecommendationsBtn) showRecommendationsBtn.classList.add('active');
     if (showPlaylistsBtn) showPlaylistsBtn.classList.remove('active');
 
-    // Call fetchAndSetUserType on page load
-    fetchAndSetUserType();
+    // 자동으로 사용자 타입 확인하지 않음 - 사용자가 직접 선택할 때까지 대기
+    // fetchAndSetUserType(); // 이 라인 제거
 
     // Form submission
     if (form) {
