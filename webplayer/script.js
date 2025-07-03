@@ -1,26 +1,41 @@
-const client_id = 'd28df89507ca47bebaa9385ebb546e92';  // Replace this
-const redirect_uri = 'http://localhost:8000/callback'; // Ensure this matches your Flask app's redirect URI
-const scopes = 'streaming user-read-email user-read-private user-modify-playback-state user-read-playback-state';
+// Get configuration from backend
+let CONFIG = {};
 
+// Global variables
 let spotifyPlayer = null;
 let currentTrackUri = null;
 let activeDeviceId = null;
 let playbackUpdateInterval = null;
-let currentDisplayedRecommendations = []; // Stores the 12 currently displayed tracks
-let recommendationPool = []; // Stores additional tracks for replacement
-let currentSeedTrackName = ''; // To store the seed track name for feedback
-let currentSeedArtistName = ''; // To store the seed artist name for feedback
+let currentDisplayedRecommendations = [];
+let recommendationPool = [];
+let currentSeedTrackName = '';
+let currentSeedArtistName = '';
 
 let togglePlayButton, previousTrackButton, nextTrackButton, volumeSlider, seekSlider, spotifyPlayerBar;
-let audioPreview; // Declare audioPreview globally
-let accessToken = null; // Declare accessToken globally
+let audioPreview;
+let accessToken = null;
 
-let currentPlaylist = []; // Stores the currently active playlist for playback
-let currentPlaylistIndex = -1; // Current index in the playlist
-let currentPlaylistId = null; // Current playlist ID being played
-let isShuffling = false; // Flag for shuffle mode
-let isPremiumUser = false; // Flag for premium user status
+let currentPlaylist = [];
+let currentPlaylistIndex = -1;
+let currentPlaylistId = null;
+let isShuffling = false;
 let userSelectedMode = null; // 'premium' or 'general'
+let currentUser = null; // Store user info
+
+// Initialize configuration
+async function initializeConfig() {
+    try {
+        const response = await fetch('/config');
+        if (response.ok) {
+            CONFIG = await response.json();
+            console.log('Configuration loaded:', CONFIG);
+        } else {
+            console.error('Failed to load configuration');
+        }
+    } catch (error) {
+        console.error('Error loading configuration:', error);
+    }
+}
 
 // Helper function to format time
 function formatTime(ms) {
@@ -29,11 +44,10 @@ function formatTime(ms) {
     return minutes + ':' + (seconds < 10 ? '0' : '') + seconds;
 }
 
-// Define this function at the global scope for Spotify SDK - but only initialize when needed
+// Define this function at the global scope for Spotify SDK
 window.onSpotifyWebPlaybackSDKReady = () => {
     console.log('Spotify Web Playback SDK is ready!');
     
-    // Only initialize if user selected premium mode
     if (userSelectedMode !== 'premium') {
         console.log('General user mode - Spotify Player not needed');
         return;
@@ -57,19 +71,17 @@ window.onSpotifyWebPlaybackSDKReady = () => {
                 cb(data.access_token);
             } catch (error) {
                 console.error('Error getting fresh Spotify SDK token:', error);
-                cb(''); // Pass empty token to indicate failure
+                cb('');
             }
         },
         volume: 0.5
     });
 
-    // Connect to the player!
     spotifyPlayer.connect();
 
     spotifyPlayer.addListener('ready', ({ device_id }) => {
         console.log('Ready with Device ID', device_id);
-        activeDeviceId = device_id; // Store the device ID
-        // Now that the player is ready, enable controls and show player bar
+        activeDeviceId = device_id;
         togglePlayerControls(true);
         const miniPlayerBar = document.getElementById('mini-player-bar');
         if (miniPlayerBar) {
@@ -87,94 +99,23 @@ window.onSpotifyWebPlaybackSDKReady = () => {
     });
 
     spotifyPlayer.addListener('player_state_changed', (state) => {
-        if (!state) {
-            return;
-        }
+        if (!state) return;
 
-        // Clear previous interval if any
         if (playbackUpdateInterval) {
             clearInterval(playbackUpdateInterval);
         }
 
         const { current_track: track } = state.track_window;
         if (track) {
-            const albumArt = document.getElementById('mini-player-album-art');
-            const trackName = document.getElementById('mini-player-track-name');
-            const artistName = document.getElementById('mini-player-artist-name');
-            const miniPlayerBar = document.getElementById('mini-player-bar');
-            const togglePlay = document.getElementById('mini-player-toggle-play');
-
-            if (albumArt) albumArt.src = track.album.images[0].url;
-            if (trackName) trackName.textContent = track.name;
-            if (artistName) artistName.textContent = track.artists.map(artist => artist.name).join(', ');
-            if (miniPlayerBar) miniPlayerBar.classList.remove('d-none');
-            if (togglePlay) togglePlay.innerHTML = state.paused ? '<i class="bi bi-play-fill"></i>' : '<i class="bi bi-pause-fill"></i>';
-
-            const duration = state.duration;
-            const seekSlider = document.getElementById('mini-player-seek-slider');
-            const totalTime = document.getElementById('mini-player-total-time');
+            updateMiniPlayerDisplay(track, state);
             
-            if (seekSlider) seekSlider.max = duration; // Set max to track duration
-            if (totalTime) totalTime.textContent = formatTime(duration);
-
-            // Update seek slider and time displays continuously if playing
-            const updateSeekSlider = (position) => {
-                if (seekSlider) {
-                    seekSlider.value = position;
-                    const percentage = (position / duration) * 100;
-                    seekSlider.style.setProperty('--seek-progress', `${percentage}%`);
-                }
-                const currentTime = document.getElementById('mini-player-current-time');
-                if (currentTime) currentTime.textContent = formatTime(position);
-            };
-
-            if (!state.paused) {
-                playbackUpdateInterval = setInterval(() => {
-                    spotifyPlayer.getCurrentState().then(state => {
-                        if (state) {
-                            updateSeekSlider(state.position);
-                        } else {
-                            clearInterval(playbackUpdateInterval);
-                        }
-                    });
-                }, 100); // Update every 0.1 second
-            } else {
-                // If paused, just update once
-                updateSeekSlider(state.position);
-            }
-
-            // Dynamic background based on album art
-            if (albumArt && window.ColorThief) {
-                const colorThief = new ColorThief();
-                albumArt.onload = function() {
-                    try {
-                        const dominantColor = colorThief.getColor(albumArt);
-                        const rgbColor = `rgb(${dominantColor[0]}, ${dominantColor[1]}, ${dominantColor[2]})`;
-                        if (miniPlayerBar) {
-                            miniPlayerBar.style.backgroundColor = rgbColor;
-                        }
-                    } catch (e) {
-                        console.error("Error getting dominant color:", e);
-                        if (miniPlayerBar) {
-                            miniPlayerBar.style.backgroundColor = '#282828'; // Fallback
-                        }
-                    }
-                };
-                // If image is already loaded (e.g., from cache), trigger onload manually
-                if (albumArt.complete) {
-                    albumArt.onload();
-                }
-            }
-
-            // Auto-play next track in playlist if not shuffling and not last track
-            if (!state.paused && state.position >= state.duration - 1000 && currentPlaylist.length > 0) { // 1 second before end
+            if (!state.paused && state.position >= state.duration - 1000 && currentPlaylist.length > 0) {
                 if (isShuffling) {
                     playRandomTrackInPlaylist();
                 } else {
                     playNextTrackInPlaylist();
                 }
             }
-
         } else {
             const miniPlayerBar = document.getElementById('mini-player-bar');
             if (miniPlayerBar) {
@@ -183,57 +124,90 @@ window.onSpotifyWebPlaybackSDKReady = () => {
         }
     });
 
-    // Seek slider event listener
+    // Add seek slider event listener
     const seekSlider = document.getElementById('mini-player-seek-slider');
     if (seekSlider) {
         seekSlider.addEventListener('input', (event) => {
-            if (userSelectedMode === 'premium') {
-                if (spotifyPlayer) {
-                    spotifyPlayer.seek(Number(event.target.value));
-                }
-            } else {
-                if (audioPreview) {
-                    audioPreview.currentTime = Number(event.target.value) / 1000; // Convert ms to seconds
-                }
+            if (userSelectedMode === 'premium' && spotifyPlayer) {
+                spotifyPlayer.seek(Number(event.target.value));
+            } else if (audioPreview) {
+                audioPreview.currentTime = Number(event.target.value) / 1000;
             }
-        });
-    }
-
-    const previousBtn = document.getElementById('mini-player-previous');
-    if (previousBtn) {
-        previousBtn.addEventListener('click', () => {
-            if (spotifyPlayer) {
-                playPreviousTrackInPlaylist();
-            }
-        });
-    }
-
-    const nextBtn = document.getElementById('mini-player-next');
-    if (nextBtn) {
-        nextBtn.addEventListener('click', () => {
-            if (spotifyPlayer) {
-                playNextTrackInPlaylist();
-            }
-        });
-    }
-
-    const closeBtn = document.getElementById('mini-player-close');
-    if (closeBtn) {
-        closeBtn.addEventListener('click', () => {
-            if (spotifyPlayer) {
-                spotifyPlayer.pause(); // Pause playback
-            }
-            const miniPlayerBar = document.getElementById('mini-player-bar');
-            if (miniPlayerBar) {
-                miniPlayerBar.classList.add('d-none'); // Hide the mini player bar
-            }
-            currentTrackUri = null; // Clear current track
         });
     }
 };
 
+// Update mini player display
+function updateMiniPlayerDisplay(track, state) {
+    const albumArt = document.getElementById('mini-player-album-art');
+    const trackName = document.getElementById('mini-player-track-name');
+    const artistName = document.getElementById('mini-player-artist-name');
+    const miniPlayerBar = document.getElementById('mini-player-bar');
+    const togglePlay = document.getElementById('mini-player-toggle-play');
+
+    if (albumArt) albumArt.src = track.album.images[0].url;
+    if (trackName) trackName.textContent = track.name;
+    if (artistName) artistName.textContent = track.artists.map(artist => artist.name).join(', ');
+    if (miniPlayerBar) miniPlayerBar.classList.remove('d-none');
+    if (togglePlay) togglePlay.innerHTML = state.paused ? '<i class="bi bi-play-fill"></i>' : '<i class="bi bi-pause-fill"></i>';
+
+    const duration = state.duration;
+    const seekSlider = document.getElementById('mini-player-seek-slider');
+    const totalTime = document.getElementById('mini-player-total-time');
+    
+    if (seekSlider) seekSlider.max = duration;
+    if (totalTime) totalTime.textContent = formatTime(duration);
+
+    const updateSeekSlider = (position) => {
+        if (seekSlider) {
+            seekSlider.value = position;
+            const percentage = (position / duration) * 100;
+            seekSlider.style.setProperty('--seek-progress', `${percentage}%`);
+        }
+        const currentTime = document.getElementById('mini-player-current-time');
+        if (currentTime) currentTime.textContent = formatTime(position);
+    };
+
+    if (!state.paused) {
+        playbackUpdateInterval = setInterval(() => {
+            spotifyPlayer.getCurrentState().then(state => {
+                if (state) {
+                    updateSeekSlider(state.position);
+                } else {
+                    clearInterval(playbackUpdateInterval);
+                }
+            });
+        }, 100);
+    } else {
+        updateSeekSlider(state.position);
+    }
+
+    // Dynamic background based on album art
+    if (albumArt && window.ColorThief) {
+        const colorThief = new ColorThief();
+        albumArt.onload = function() {
+            try {
+                const dominantColor = colorThief.getColor(albumArt);
+                const rgbColor = `rgb(${dominantColor[0]}, ${dominantColor[1]}, ${dominantColor[2]})`;
+                if (miniPlayerBar) {
+                    miniPlayerBar.style.backgroundColor = rgbColor;
+                }
+            } catch (e) {
+                console.error("Error getting dominant color:", e);
+                if (miniPlayerBar) {
+                    miniPlayerBar.style.backgroundColor = '#282828';
+                }
+            }
+        };
+        if (albumArt.complete) {
+            albumArt.onload();
+        }
+    }
+}
+
+// Play track function
 async function playTrack(trackUri, playlist = [], startIndex = -1, previewUrl = null) {
-    if (userSelectedMode === 'premium' && isPremiumUser) {
+    if (userSelectedMode === 'premium' && currentUser?.product === 'premium') {
         if (!spotifyPlayer) {
             alert('Spotify Player not ready. Please log in to Spotify.');
             return;
@@ -243,8 +217,6 @@ async function playTrack(trackUri, playlist = [], startIndex = -1, previewUrl = 
         currentPlaylist = playlist;
         currentPlaylistIndex = startIndex;
 
-        console.log(`Attempting to play track with URI: ${trackUri}`);
-
         if (!trackUri || !trackUri.startsWith('spotify:track:')) {
             console.error('Invalid track URI provided:', trackUri);
             alert('Error: Invalid track URI. Cannot play this track.');
@@ -252,7 +224,6 @@ async function playTrack(trackUri, playlist = [], startIndex = -1, previewUrl = 
         }
 
         try {
-            // Get the latest access token before making the play request
             const tokenResponse = await fetch('/spotify_sdk_token');
             if (!tokenResponse.ok) {
                 throw new Error('Failed to get Spotify SDK token for playback.');
@@ -274,16 +245,16 @@ async function playTrack(trackUri, playlist = [], startIndex = -1, previewUrl = 
             if (!response.ok) {
                 const errorData = await response.json();
                 console.error('Failed to play track:', errorData);
-                alert('Failed to play track. Make sure Spotify is open and you are logged in with a Premium account.' + (errorData.error ? ` Error: ${errorData.error.message}` : ''));
+                alert('Failed to play track. Make sure Spotify is open and you are logged in with a Premium account.');
             } else {
-                // Update visual feedback if playing from playlist
                 updatePlaylistVisualFeedback();
             }
         } catch (error) {
             console.error('Error playing track:', error);
             alert('Error playing track. Check console for details.');
         }
-    } else { // General user or free user, play preview
+    } else {
+        // Preview mode for general users or free accounts
         currentPlaylist = playlist;
         currentPlaylistIndex = startIndex;
         
@@ -292,66 +263,78 @@ async function playTrack(trackUri, playlist = [], startIndex = -1, previewUrl = 
             const togglePlay = document.getElementById('mini-player-toggle-play');
             if (togglePlay) togglePlay.innerHTML = '<i class="bi bi-play-fill"></i>';
         } else if (previewUrl) {
-            if (audioPreview) {
-                audioPreview.src = previewUrl;
-                audioPreview.play();
-                const togglePlay = document.getElementById('mini-player-toggle-play');
-                if (togglePlay) togglePlay.innerHTML = '<i class="bi bi-pause-fill"></i>';
-                
-                const miniPlayerBar = document.getElementById('mini-player-bar');
-                if (miniPlayerBar) miniPlayerBar.classList.remove('d-none');
-                
-                // Update mini-player display for preview
-                const track = playlist[startIndex];
-                if (track) {
-                    const albumArt = document.getElementById('mini-player-album-art');
-                    const trackName = document.getElementById('mini-player-track-name');
-                    const artistName = document.getElementById('mini-player-artist-name');
-                    const seekSlider = document.getElementById('mini-player-seek-slider');
-                    const totalTime = document.getElementById('mini-player-total-time');
-
-                    if (albumArt) albumArt.src = track.album_cover_url;
-                    if (trackName) trackName.textContent = track.name;
-                    if (artistName) artistName.textContent = track.artist;
-                    if (seekSlider) seekSlider.max = audioPreview.duration * 1000; // Convert to ms
-                    if (totalTime) totalTime.textContent = formatTime(audioPreview.duration * 1000);
-
-                    // Update seek slider and time displays continuously
-                    if (playbackUpdateInterval) {
-                        clearInterval(playbackUpdateInterval);
-                    }
-                    playbackUpdateInterval = setInterval(() => {
-                        if (seekSlider) seekSlider.value = audioPreview.currentTime * 1000;
-                        const currentTime = document.getElementById('mini-player-current-time');
-                        if (currentTime) currentTime.textContent = formatTime(audioPreview.currentTime * 1000);
-                        const percentage = (audioPreview.currentTime / audioPreview.duration) * 100;
-                        if (seekSlider) seekSlider.style.setProperty('--seek-progress', `${percentage}%`);
-                    }, 100);
-
-                    audioPreview.onended = () => {
-                        clearInterval(playbackUpdateInterval);
-                        const togglePlay = document.getElementById('mini-player-toggle-play');
-                        if (togglePlay) togglePlay.innerHTML = '<i class="bi bi-play-fill"></i>';
-                        
-                        // Auto-play next track in playlist
-                        if (currentPlaylist.length > 0 && currentPlaylistIndex < currentPlaylist.length - 1) {
-                            playNextTrackInPlaylist();
-                        } else {
-                            const miniPlayerBar = document.getElementById('mini-player-bar');
-                            if (miniPlayerBar) miniPlayerBar.classList.add('d-none');
-                        }
-                    };
-                }
-                
-                // Update visual feedback if playing from playlist
-                updatePlaylistVisualFeedback();
-            }
+            playPreviewTrack(previewUrl, playlist, startIndex);
         } else {
             alert('No preview available for this track.');
         }
     }
 }
 
+// Play preview track
+function playPreviewTrack(previewUrl, playlist, startIndex) {
+    if (audioPreview) {
+        audioPreview.src = previewUrl;
+        audioPreview.play();
+        
+        const togglePlay = document.getElementById('mini-player-toggle-play');
+        if (togglePlay) togglePlay.innerHTML = '<i class="bi bi-pause-fill"></i>';
+        
+        const miniPlayerBar = document.getElementById('mini-player-bar');
+        if (miniPlayerBar) miniPlayerBar.classList.remove('d-none');
+        
+        const track = playlist[startIndex];
+        if (track) {
+            updatePreviewPlayerDisplay(track);
+        }
+        
+        updatePlaylistVisualFeedback();
+    }
+}
+
+// Update preview player display
+function updatePreviewPlayerDisplay(track) {
+    const albumArt = document.getElementById('mini-player-album-art');
+    const trackName = document.getElementById('mini-player-track-name');
+    const artistName = document.getElementById('mini-player-artist-name');
+    const seekSlider = document.getElementById('mini-player-seek-slider');
+    const totalTime = document.getElementById('mini-player-total-time');
+
+    if (albumArt) albumArt.src = track.album_cover_url;
+    if (trackName) trackName.textContent = track.name;
+    if (artistName) artistName.textContent = track.artist;
+    
+    audioPreview.onloadedmetadata = () => {
+        if (seekSlider) seekSlider.max = audioPreview.duration * 1000;
+        if (totalTime) totalTime.textContent = formatTime(audioPreview.duration * 1000);
+    };
+
+    if (playbackUpdateInterval) {
+        clearInterval(playbackUpdateInterval);
+    }
+    
+    playbackUpdateInterval = setInterval(() => {
+        if (seekSlider) seekSlider.value = audioPreview.currentTime * 1000;
+        const currentTime = document.getElementById('mini-player-current-time');
+        if (currentTime) currentTime.textContent = formatTime(audioPreview.currentTime * 1000);
+        const percentage = (audioPreview.currentTime / audioPreview.duration) * 100;
+        if (seekSlider) seekSlider.style.setProperty('--seek-progress', `${percentage}%`);
+    }, 100);
+
+    audioPreview.onended = () => {
+        clearInterval(playbackUpdateInterval);
+        const togglePlay = document.getElementById('mini-player-toggle-play');
+        if (togglePlay) togglePlay.innerHTML = '<i class="bi bi-play-fill"></i>';
+        
+        if (currentPlaylist.length > 0 && currentPlaylistIndex < currentPlaylist.length - 1) {
+            playNextTrackInPlaylist();
+        } else {
+            const miniPlayerBar = document.getElementById('mini-player-bar');
+            if (miniPlayerBar) miniPlayerBar.classList.add('d-none');
+        }
+    };
+}
+
+// Playlist navigation functions
 function playNextTrackInPlaylist() {
     if (currentPlaylist.length === 0) return;
 
@@ -362,17 +345,10 @@ function playNextTrackInPlaylist() {
 
     currentPlaylistIndex++;
     if (currentPlaylistIndex >= currentPlaylist.length) {
-        currentPlaylistIndex = 0; // Loop back to start
+        currentPlaylistIndex = 0;
     }
     const nextTrack = currentPlaylist[currentPlaylistIndex];
-    if (userSelectedMode === 'premium' && isPremiumUser) {
-        playTrack(nextTrack.uri, currentPlaylist, currentPlaylistIndex, nextTrack.preview_url);
-    } else {
-        // For general users, play the preview URL
-        playTrack(null, currentPlaylist, currentPlaylistIndex, nextTrack.preview_url);
-    }
-    
-    // Update visual feedback in playlist if current playlist is being displayed
+    playTrack(nextTrack.uri, currentPlaylist, currentPlaylistIndex, nextTrack.preview_url);
     updatePlaylistVisualFeedback();
 }
 
@@ -386,17 +362,10 @@ function playPreviousTrackInPlaylist() {
 
     currentPlaylistIndex--;
     if (currentPlaylistIndex < 0) {
-        currentPlaylistIndex = currentPlaylist.length - 1; // Loop to end
+        currentPlaylistIndex = currentPlaylist.length - 1;
     }
     const prevTrack = currentPlaylist[currentPlaylistIndex];
-    if (userSelectedMode === 'premium' && isPremiumUser) {
-        playTrack(prevTrack.uri, currentPlaylist, currentPlaylistIndex, prevTrack.preview_url);
-    } else {
-        // For general users, play the preview URL
-        playTrack(null, currentPlaylist, currentPlaylistIndex, prevTrack.preview_url);
-    }
-    
-    // Update visual feedback in playlist if current playlist is being displayed
+    playTrack(prevTrack.uri, currentPlaylist, currentPlaylistIndex, prevTrack.preview_url);
     updatePlaylistVisualFeedback();
 }
 
@@ -405,71 +374,57 @@ function playRandomTrackInPlaylist() {
     const randomIndex = Math.floor(Math.random() * currentPlaylist.length);
     currentPlaylistIndex = randomIndex;
     const randomTrack = currentPlaylist[randomIndex];
-    if (userSelectedMode === 'premium' && isPremiumUser) {
-        playTrack(randomTrack.uri, currentPlaylist, currentPlaylistIndex, randomTrack.preview_url);
-    } else {
-        // For general users, play the preview URL
-        playTrack(null, currentPlaylist, currentPlaylistIndex, randomTrack.preview_url);
-    }
-    
-    // Update visual feedback in playlist if current playlist is being displayed
+    playTrack(randomTrack.uri, currentPlaylist, currentPlaylistIndex, randomTrack.preview_url);
     updatePlaylistVisualFeedback();
 }
 
-// Function to update visual feedback in playlist
+// Update visual feedback in playlist
 function updatePlaylistVisualFeedback() {
     if (currentPlaylistId === null) return;
     
     const playlistTabContent = document.getElementById(`playlist-${currentPlaylistId}`);
     if (playlistTabContent) {
-        // Remove all previous "now playing" indicators
         playlistTabContent.querySelectorAll('.playlist-track-item').forEach(item => {
             item.style.border = 'none';
-            item.querySelector('.play-playlist-track-btn i').className = 'bi bi-play-fill';
+            const playBtn = item.querySelector('.play-playlist-track-btn i');
+            if (playBtn) playBtn.className = 'bi bi-play-fill';
         });
         
-        // Add "now playing" indicator to current track
         const currentTrackItem = playlistTabContent.querySelectorAll('.playlist-track-item')[currentPlaylistIndex];
         if (currentTrackItem) {
             currentTrackItem.style.border = '2px solid #1DB954';
-            currentTrackItem.querySelector('.play-playlist-track-btn i').className = 'bi bi-pause-fill';
+            const playBtn = currentTrackItem.querySelector('.play-playlist-track-btn i');
+            if (playBtn) playBtn.className = 'bi bi-pause-fill';
         }
     }
 }
 
-async function checkUserLoginAndSetup() {
-    console.log('Checking user login status...');
+// Check user login status
+async function checkUserLoginStatus() {
     try {
         const response = await fetch('/spotify_sdk_token');
         if (response.ok) {
             const data = await response.json();
             accessToken = data.access_token;
+            currentUser = {
+                product: data.product_type || 'free'
+            };
+            
             localStorage.setItem('spotify_access_token', data.access_token);
             
-            // 사용자가 Premium인지 확인
-            isPremiumUser = (data.product_type === 'premium');
-            console.log('User product type:', data.product_type, 'isPremiumUser:', isPremiumUser);
-            
-            // UI 업데이트
-            const spotifyLoginSection = document.getElementById('spotify-login-section');
-            const userTypeSelection = document.getElementById('user-type-selection');
-            const appContent = document.getElementById('app-content');
-            
-            // 로그인 섹션 숨기기
-            if (spotifyLoginSection) spotifyLoginSection.classList.add('d-none');
-            
-            // 사용자 선택 화면 숨기기
-            if (userTypeSelection) userTypeSelection.classList.add('d-none');
-            
-            // 앱 콘텐츠 표시
-            if (appContent) appContent.classList.remove('d-none');
-            
-            // Premium 모드를 선택했지만 Free 사용자인 경우 알림
-            if (userSelectedMode === 'premium' && !isPremiumUser) {
-                alert('You have a Spotify Free account. You can still use the app with preview playback only.');
+            // Get user profile info
+            const profileResponse = await fetch('/user_profile');
+            if (profileResponse.ok) {
+                const profile = await profileResponse.json();
+                currentUser = {
+                    ...currentUser,
+                    id: profile.id,
+                    display_name: profile.display_name,
+                    email: profile.email,
+                    images: profile.images
+                };
             }
             
-            togglePlayerControls(true);
             return true;
         } else {
             console.warn('User not logged in to Spotify');
@@ -481,99 +436,97 @@ async function checkUserLoginAndSetup() {
     }
 }
 
-function redirectToSpotifyLogin() {
-    const authUrl = `https://accounts.spotify.com/authorize?client_id=${client_id}&response_type=code&redirect_uri=${encodeURIComponent(redirect_uri)}&scope=${encodeURIComponent(scopes)}`;
-    window.location = authUrl;
-}
-
-// Helper function to toggle player controls and visibility
-function togglePlayerControls(enable) {
-    const togglePlayButton = document.getElementById('mini-player-toggle-play');
-    const previousTrackButton = document.getElementById('mini-player-previous');
-    const nextTrackButton = document.getElementById('mini-player-next');
-    const volumeSlider = document.getElementById('mini-player-volume-slider');
-    const seekSlider = document.getElementById('mini-player-seek-slider');
-    const spotifyPlayerBar = document.getElementById('mini-player-bar');
-    const shuffleButton = document.getElementById('mini-player-shuffle');
-
-    if (togglePlayButton) togglePlayButton.disabled = !enable;
-    if (previousTrackButton) previousTrackButton.disabled = !enable;
-    if (nextTrackButton) nextTrackButton.disabled = !enable;
-    if (volumeSlider) volumeSlider.disabled = !enable;
-    if (seekSlider) seekSlider.disabled = !enable;
-    if (shuffleButton) shuffleButton.disabled = !enable;
+// Update user info display
+function updateUserInfoDisplay() {
+    if (!currentUser) return;
     
-    if (!enable && spotifyPlayerBar) {
-        spotifyPlayerBar.classList.add('d-none');
+    const userAvatar = document.getElementById('user-avatar');
+    const userName = document.getElementById('user-name');
+    const userMode = document.getElementById('user-mode');
+    
+    if (userAvatar && currentUser.images && currentUser.images.length > 0) {
+        userAvatar.src = currentUser.images[0].url;
+        userAvatar.style.display = 'block';
+    }
+    
+    if (userName) {
+        userName.textContent = currentUser.display_name || currentUser.email || 'Spotify User';
+    }
+    
+    if (userMode) {
+        const modeText = userSelectedMode === 'premium' ? 'Premium Mode' : 'Preview Mode';
+        const productText = currentUser.product === 'premium' ? 'Premium Account' : 'Free Account';
+        userMode.textContent = `${modeText} • ${productText}`;
+    }
+    
+    // Show product type info if needed
+    const productInfo = document.getElementById('user-product-info');
+    if (productInfo) {
+        if (userSelectedMode === 'premium' && currentUser.product !== 'premium') {
+            productInfo.innerHTML = `
+                <strong>Notice:</strong> You selected Premium Mode but have a Spotify Free account. 
+                You'll experience preview playback only. <a href="https://www.spotify.com/premium/" target="_blank">Upgrade to Premium</a> for full song playback.
+            `;
+            productInfo.classList.remove('d-none');
+            productInfo.className = 'alert alert-warning mb-4';
+        } else if (userSelectedMode === 'premium' && currentUser.product === 'premium') {
+            productInfo.innerHTML = `
+                <strong>Great!</strong> You have Spotify Premium and selected Premium Mode. Enjoy full song playback!
+            `;
+            productInfo.classList.remove('d-none');
+            productInfo.className = 'alert alert-success mb-4';
+        } else {
+            productInfo.classList.add('d-none');
+        }
     }
 }
 
-// Helper function to get new recommendation from pool
+// Helper function to toggle player controls
+function togglePlayerControls(enable) {
+    const controls = [
+        'mini-player-toggle-play',
+        'mini-player-previous', 
+        'mini-player-next',
+        'mini-player-volume-slider',
+        'mini-player-seek-slider',
+        'mini-player-shuffle'
+    ];
+    
+    controls.forEach(id => {
+        const element = document.getElementById(id);
+        if (element) element.disabled = !enable;
+    });
+    
+    if (!enable) {
+        const spotifyPlayerBar = document.getElementById('mini-player-bar');
+        if (spotifyPlayerBar) {
+            spotifyPlayerBar.classList.add('d-none');
+        }
+    }
+}
+
+// Get new recommendation from pool
 function getNewRecommendationFromPool() {
     if (recommendationPool.length > 0) {
-        return recommendationPool.shift(); // Remove and return the first track from the pool
+        return recommendationPool.shift();
     }
-    return null; // No more tracks in the pool
+    return null;
 }
 
-// Helper function to replace a track card
+// Replace track card
 async function replaceTrackCard(cardElement, newTrack) {
     try {
-        // Add the new track to current displayed recommendations
         const trackIndex = Array.from(cardElement.parentNode.children).indexOf(cardElement);
         if (trackIndex !== -1) {
             currentDisplayedRecommendations[trackIndex] = newTrack;
         }
 
-        // Fade out the old card
         cardElement.style.transition = 'opacity 1.5s ease-out';
         cardElement.style.opacity = '0';
 
         setTimeout(() => {
-            // Replace the card content
-            cardElement.innerHTML = `
-                <div class="card h-100" role="button" data-track-uri="${newTrack.uri}" data-track-id="${newTrack.id}" data-preview-url="${newTrack.preview_url || ''}">
-                    <img src="${newTrack.album_cover_url}" class="card-img-top" alt="${newTrack.name}">
-                    <div class="card-body">
-                        <h5 class="card-title text-truncate">${newTrack.name}</h5>
-                        <p class="card-text text-truncate">${newTrack.artist}</p>
-                        <div class="d-flex justify-content-between align-items-center mt-2">
-                            <button class="btn btn-sm btn-outline-success feedback-btn" data-track-id="${newTrack.id}" data-rating="0">Skip</button>
-                            <div class="btn-group" role="group">
-                                <button class="btn btn-sm btn-outline-success feedback-btn" data-track-id="${newTrack.id}" data-rating="1">1</button>
-                                <button class="btn btn-sm btn-outline-success feedback-btn" data-track-id="${newTrack.id}" data-rating="2">2</button>
-                                <button class="btn btn-sm btn-outline-success feedback-btn" data-track-id="${newTrack.id}" data-rating="3">3</button>
-                                <button class="btn btn-sm btn-outline-success feedback-btn" data-track-id="${newTrack.id}" data-rating="4">4</button>
-                                <button class="btn btn-sm btn-outline-success feedback-btn" data-track-id="${newTrack.id}" data-rating="5">5</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            // Add event listeners to the new card
-            const newCard = cardElement.querySelector('.card[data-track-uri]');
-            if (newCard) {
-                newCard.addEventListener('click', (event) => {
-                    if (!event.target.closest('.feedback-btn')) {
-                        const trackUri = newCard.dataset.trackUri;
-                        const previewUrl = newCard.dataset.previewUrl;
-                        playTrack(trackUri, currentDisplayedRecommendations, trackIndex, previewUrl);
-                    }
-                });
-            }
-
-            // Add event listeners to feedback buttons
-            cardElement.querySelectorAll('.feedback-btn').forEach(button => {
-                button.addEventListener('click', (event) => {
-                    event.stopPropagation();
-                    const trackId = event.target.dataset.trackId;
-                    const rating = parseFloat(event.target.dataset.rating);
-                    sendFeedback(trackId, rating, event.target);
-                });
-            });
-
-            // Fade in the new card
+            cardElement.innerHTML = createTrackCardHTML(newTrack);
+            addTrackCardEventListeners(cardElement, trackIndex);
             cardElement.style.opacity = '1';
         }, 1500);
 
@@ -582,7 +535,53 @@ async function replaceTrackCard(cardElement, newTrack) {
     }
 }
 
-// Helper function to show error messages
+// Create track card HTML
+function createTrackCardHTML(track) {
+    return `
+        <div class="card h-100" role="button" data-track-uri="${track.uri}" data-track-id="${track.id}" data-preview-url="${track.preview_url || ''}">
+            <img src="${track.album_cover_url}" class="card-img-top" alt="${track.name}">
+            <div class="card-body">
+                <h5 class="card-title text-truncate">${track.name}</h5>
+                <p class="card-text text-truncate">${track.artist}</p>
+                <div class="d-flex justify-content-between align-items-center mt-2">
+                    <button class="btn btn-sm btn-outline-success feedback-btn" data-track-id="${track.id}" data-rating="0">Skip</button>
+                    <div class="btn-group" role="group">
+                        <button class="btn btn-sm btn-outline-success feedback-btn" data-track-id="${track.id}" data-rating="1">1</button>
+                        <button class="btn btn-sm btn-outline-success feedback-btn" data-track-id="${track.id}" data-rating="2">2</button>
+                        <button class="btn btn-sm btn-outline-success feedback-btn" data-track-id="${track.id}" data-rating="3">3</button>
+                        <button class="btn btn-sm btn-outline-success feedback-btn" data-track-id="${track.id}" data-rating="4">4</button>
+                        <button class="btn btn-sm btn-outline-success feedback-btn" data-track-id="${track.id}" data-rating="5">5</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// Add event listeners to track card
+function addTrackCardEventListeners(cardElement, trackIndex) {
+    const newCard = cardElement.querySelector('.card[data-track-uri]');
+    if (newCard) {
+        newCard.addEventListener('click', (event) => {
+            if (!event.target.closest('.feedback-btn')) {
+                const trackUri = newCard.dataset.trackUri;
+                const previewUrl = newCard.dataset.previewUrl;
+                playTrack(trackUri, currentDisplayedRecommendations, trackIndex, previewUrl);
+            }
+        });
+    }
+
+    cardElement.querySelectorAll('.feedback-btn').forEach(button => {
+        button.addEventListener('click', (event) => {
+            event.stopPropagation();
+            const trackId = event.target.dataset.trackId;
+            const rating = parseFloat(event.target.dataset.rating);
+            sendFeedback(trackId, rating, event.target);
+        });
+    });
+}
+
+// Show error messages
 function showError(message) {
     const errorMessage = document.getElementById('error-message');
     if (errorMessage) {
@@ -591,7 +590,7 @@ function showError(message) {
     }
 }
 
-// Helper function to fetch and display playlists
+// Fetch and display playlists
 async function fetchAndDisplayPlaylists() {
     try {
         const response = await fetch('/playlists');
@@ -600,7 +599,6 @@ async function fetchAndDisplayPlaylists() {
         }
         const playlists = await response.json();
         
-        // Update playlist tabs and content
         for (let i = 0; i <= 5; i++) {
             const tabButton = document.getElementById(`playlist-${i}-tab`);
             const tabContent = document.getElementById(`playlist-${i}`);
@@ -608,72 +606,18 @@ async function fetchAndDisplayPlaylists() {
             if (tabButton && tabContent) {
                 const tracks = playlists[i.toString()] || [];
                 
-                // Update tab title with count
                 if (i === 0) {
                     tabButton.textContent = `Skipped (${tracks.length})`;
                 } else {
                     tabButton.textContent = `Rating ${i} (${tracks.length})`;
                 }
                 
-                // Update tab content
                 if (tracks.length === 0) {
                     tabContent.innerHTML = '<p class="text-muted">No tracks in this playlist yet.</p>';
                 } else {
                     tabContent.innerHTML = tracks.map((track, index) => {
-                        // Handle both old format (just ID) and new format (full track info)
-                        let trackName = track.name || 'Unknown Track';
-                        let artistName = track.artist || 'Unknown Artist';
-                        let albumCover = track.album_cover_url || 'https://via.placeholder.com/60x60?text=♪';
-                        let rating = track.rating || 0;
-                        let trackId = track.id || track;
-                        let trackUri = track.uri || '';
-                        let previewUrl = track.preview_url || '';
-                        
-                        // If track is just a string (old format), display as is but mark as legacy
-                        if (typeof track === 'string') {
-                            trackName = track;
-                            artistName = 'Legacy Entry';
-                            albumCover = 'https://via.placeholder.com/60x60?text=♪';
-                            trackId = track;
-                            trackUri = '';
-                            previewUrl = '';
-                        }
-                        
-                        return `
-                            <div class="d-flex align-items-center mb-3 p-3 playlist-track-item" style="background-color: #1a1a1a; border-radius: 8px; cursor: pointer; transition: all 0.2s;" 
-                                 data-track-uri="${trackUri}" 
-                                 data-track-id="${trackId}" 
-                                 data-preview-url="${previewUrl}"
-                                 data-track-name="${trackName}"
-                                 data-artist-name="${artistName}"
-                                 data-album-cover="${albumCover}"
-                                 onmouseover="this.style.backgroundColor='#2a2a2a'" 
-                                 onmouseout="this.style.backgroundColor='#1a1a1a'"
-                                 onclick="playPlaylistItem('${i}', ${index})">
-                                <div class="d-flex align-items-center me-3">
-                                    <button class="btn btn-sm btn-success play-playlist-track-btn me-2" 
-                                            onclick="playPlaylistTrack(event, '${trackUri}', '${previewUrl}', '${trackName}', '${artistName}', '${albumCover}', '${i}', ${index})"
-                                            title="Play track">
-                                        <i class="bi bi-play-fill"></i>
-                                    </button>
-                                    <img src="${albumCover}" alt="Album Art" class="rounded" style="width: 60px; height: 60px;">
-                                </div>
-                                <div class="flex-grow-1 ms-3">
-                                    <div class="text-white fw-bold">${trackName}</div>
-                                    <div class="text-muted">${artistName}</div>
-                                    <div class="text-success small">Rating: ${rating}/5</div>
-                                </div>
-                                <div class="text-end">
-                                    <button class="btn btn-sm btn-outline-danger" onclick="removeFromPlaylist('${i}', '${trackId}'); event.stopPropagation();"
-                                            title="Remove from playlist">
-                                        <i class="bi bi-trash"></i>
-                                    </button>
-                                </div>
-                            </div>
-                        `;
+                        return createPlaylistTrackHTML(track, i, index);
                     }).join('');
-                    
-                    // No need for additional click listeners since onclick is in HTML
                 }
             }
         }
@@ -682,19 +626,71 @@ async function fetchAndDisplayPlaylists() {
     }
 }
 
-// Send Feedback function
+// Create playlist track HTML
+function createPlaylistTrackHTML(track, playlistId, index) {
+    let trackName = track.name || 'Unknown Track';
+    let artistName = track.artist || 'Unknown Artist';
+    let albumCover = track.album_cover_url || 'https://via.placeholder.com/60x60?text=♪';
+    let rating = track.rating || 0;
+    let trackId = track.id || track;
+    let trackUri = track.uri || '';
+    let previewUrl = track.preview_url || '';
+    
+    if (typeof track === 'string') {
+        trackName = track;
+        artistName = 'Legacy Entry';
+        albumCover = 'https://via.placeholder.com/60x60?text=♪';
+        trackId = track;
+        trackUri = '';
+        previewUrl = '';
+    }
+    
+    return `
+        <div class="d-flex align-items-center mb-3 p-3 playlist-track-item" 
+             style="background-color: #1a1a1a; border-radius: 8px; cursor: pointer; transition: all 0.2s;" 
+             data-track-uri="${trackUri}" 
+             data-track-id="${trackId}" 
+             data-preview-url="${previewUrl}"
+             data-track-name="${trackName}"
+             data-artist-name="${artistName}"
+             data-album-cover="${albumCover}"
+             onmouseover="this.style.backgroundColor='#2a2a2a'" 
+             onmouseout="this.style.backgroundColor='#1a1a1a'"
+             onclick="playPlaylistItem('${playlistId}', ${index})">
+            <div class="d-flex align-items-center me-3">
+                <button class="btn btn-sm btn-success play-playlist-track-btn me-2" 
+                        onclick="playPlaylistTrack(event, '${trackUri}', '${previewUrl}', '${trackName}', '${artistName}', '${albumCover}', '${playlistId}', ${index})"
+                        title="Play track">
+                    <i class="bi bi-play-fill"></i>
+                </button>
+                <img src="${albumCover}" alt="Album Art" class="rounded" style="width: 60px; height: 60px;">
+            </div>
+            <div class="flex-grow-1 ms-3">
+                <div class="text-white fw-bold">${trackName}</div>
+                <div class="text-muted">${artistName}</div>
+                <div class="text-success small">Rating: ${rating}/5</div>
+            </div>
+            <div class="text-end">
+                <button class="btn btn-sm btn-outline-danger" onclick="removeFromPlaylist('${playlistId}', '${trackId}'); event.stopPropagation();"
+                        title="Remove from playlist">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+// Send feedback
 async function sendFeedback(trackId, rating, buttonElement) {
     const card = buttonElement.closest('.col-md-4, .col-lg-3');
     if (!card) return;
 
-    // Get track information from the card
     const trackCard = card.querySelector('.card[data-track-uri]');
     const trackName = card.querySelector('.card-title').textContent;
     const artistName = card.querySelector('.card-text').textContent;
     const albumCover = card.querySelector('.card-img-top').src;
     const trackUri = trackCard.dataset.trackUri;
 
-    // Disable all feedback buttons on this card
     card.querySelectorAll('.feedback-btn').forEach(btn => btn.disabled = true);
 
     try {
@@ -708,7 +704,6 @@ async function sendFeedback(trackId, rating, buttonElement) {
                 rating: rating,
                 seed_track_name: currentSeedTrackName,
                 seed_artist_name: currentSeedArtistName,
-                // Include full track information
                 track_info: {
                     id: trackId,
                     name: trackName,
@@ -730,63 +725,44 @@ async function sendFeedback(trackId, rating, buttonElement) {
         if (newTrack) {
             replaceTrackCard(card, newTrack);
         } else {
-            // If no more tracks, just fade out and remove the card
             card.style.transition = 'opacity 1.5s ease-out';
             card.style.opacity = '0';
             setTimeout(() => card.remove(), 1500);
             console.log('Recommendation pool is empty. No more tracks to display.');
         }
-        // After sending feedback, refresh playlists
+        
         fetchAndDisplayPlaylists();
 
     } catch (error) {
         console.error('Error sending feedback or replacing card:', error);
-        // Re-enable buttons if there was an error and no replacement happened
         card.querySelectorAll('.feedback-btn').forEach(btn => btn.disabled = false);
     }
 }
 
-// Display Recommendations function
+// Display recommendations
 function displayRecommendations(tracks) {
     if (!tracks || tracks.length === 0) {
         showError('No recommendations found for this user.');
         return;
     }
 
-    // Store all 16 tracks, display first 12, keep rest in pool
     currentDisplayedRecommendations = tracks.slice(0, 12);
     recommendationPool = tracks.slice(12);
 
     const resultsContainer = document.getElementById('results');
     if (resultsContainer) {
-        resultsContainer.innerHTML = ''; // Clear previous recommendations
+        resultsContainer.innerHTML = '';
 
         currentDisplayedRecommendations.forEach((track, index) => {
             const trackCard = `
                 <div class="col-md-4 col-lg-3">
-                    <div class="card h-100" role="button" data-track-uri="${track.uri}" data-track-id="${track.id}" data-preview-url="${track.preview_url || ''}">
-                        <img src="${track.album_cover_url}" class="card-img-top" alt="${track.name}">
-                        <div class="card-body">
-                            <h5 class="card-title text-truncate">${track.name}</h5>
-                            <p class="card-text text-truncate">${track.artist}</p>
-                            <div class="d-flex justify-content-between align-items-center mt-2">
-                                <button class="btn btn-sm btn-outline-success feedback-btn" data-track-id="${track.id}" data-rating="0">Skip</button>
-                                <div class="btn-group" role="group">
-                                    <button class="btn btn-sm btn-outline-success feedback-btn" data-track-id="${track.id}" data-rating="1">1</button>
-                                    <button class="btn btn-sm btn-outline-success feedback-btn" data-track-id="${track.id}" data-rating="2">2</button>
-                                    <button class="btn btn-sm btn-outline-success feedback-btn" data-track-id="${track.id}" data-rating="3">3</button>
-                                    <button class="btn btn-sm btn-outline-success feedback-btn" data-track-id="${track.id}" data-rating="4">4</button>
-                                    <button class="btn btn-sm btn-outline-success feedback-btn" data-track-id="${track.id}" data-rating="5">5</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    ${createTrackCardHTML(track)}
                 </div>
             `;
             resultsContainer.innerHTML += trackCard;
         });
 
-        // Add click listeners to new cards
+        // Add event listeners to all cards
         document.querySelectorAll('.card[data-track-uri]').forEach((card, index) => {
             card.addEventListener('click', (event) => {
                 if (!event.target.closest('.feedback-btn')) {
@@ -797,7 +773,6 @@ function displayRecommendations(tracks) {
             });
         });
 
-        // Add click listeners to feedback buttons
         document.querySelectorAll('.feedback-btn').forEach(button => {
             button.addEventListener('click', (event) => {
                 event.stopPropagation();
@@ -809,11 +784,10 @@ function displayRecommendations(tracks) {
     }
 }
 
-// Function to play track from playlist
+// Playlist functions
 function playPlaylistTrack(event, trackUri, previewUrl, trackName, artistName, albumCover, playlistId, trackIndex) {
-    event.stopPropagation(); // Prevent the row click event
+    event.stopPropagation();
     
-    // Get current playlist data from the DOM
     const playlistTabContent = document.getElementById(`playlist-${playlistId}`);
     if (playlistTabContent) {
         const trackItems = playlistTabContent.querySelectorAll('.playlist-track-item');
@@ -832,7 +806,6 @@ function playPlaylistTrack(event, trackUri, previewUrl, trackName, artistName, a
     playTrack(trackUri, currentPlaylist, trackIndex, previewUrl);
 }
 
-// Function to play track when clicking on playlist item (not button)
 function playPlaylistItem(playlistId, trackIndex) {
     const playlistTabContent = document.getElementById(`playlist-${playlistId}`);
     if (playlistTabContent) {
@@ -855,7 +828,6 @@ function playPlaylistItem(playlistId, trackIndex) {
     }
 }
 
-// Function to remove track from playlist
 async function removeFromPlaylist(playlistId, trackId) {
     try {
         const response = await fetch('/remove_local_playlist_track', {
@@ -870,7 +842,7 @@ async function removeFromPlaylist(playlistId, trackId) {
         });
 
         if (response.ok) {
-            fetchAndDisplayPlaylists(); // Refresh the playlist display
+            fetchAndDisplayPlaylists();
         } else {
             console.error('Failed to remove track from playlist');
         }
@@ -879,157 +851,158 @@ async function removeFromPlaylist(playlistId, trackId) {
     }
 }
 
-// 강제로 사용자 선택 화면으로 돌아가는 함수
-function forceUserSelection() {
-    console.log('=== FORCING USER SELECTION ===');
+// Initialize app
+async function initializeApp() {
+    console.log('Initializing Music Recommender App...');
     
-    // 모든 상태 리셋
-    userSelectedMode = null;
-    isPremiumUser = false;
-    accessToken = null;
-    currentPlaylist = [];
-    currentPlaylistIndex = -1;
-    currentPlaylistId = null;
+    // Load configuration first
+    await initializeConfig();
     
-    // 모든 저장소 클리어
-    localStorage.clear();
-    sessionStorage.clear();
+    // Check if user is already logged in
+    const isLoggedIn = await checkUserLoginStatus();
     
-    // UI 리셋
-    const userTypeSelection = document.getElementById('user-type-selection');
-    const appContent = document.getElementById('app-content');
-    const spotifyLoginSection = document.getElementById('spotify-login-section');
-    
-    // 앱 콘텐츠 숨기기
-    if (appContent) {
-        appContent.classList.add('d-none');
-        appContent.style.display = 'none';
+    if (isLoggedIn) {
+        console.log('User already logged in - checking for selected mode...');
+        
+        // Check if we have a selected mode in URL params or localStorage
+        const urlParams = new URLSearchParams(window.location.search);
+        const storedMode = localStorage.getItem('selectedUserMode');
+        
+        if (urlParams.get('mode')) {
+            userSelectedMode = urlParams.get('mode');
+            localStorage.setItem('selectedUserMode', userSelectedMode);
+        } else if (storedMode) {
+            userSelectedMode = storedMode;
+        }
+        
+        if (userSelectedMode) {
+            // User is logged in and has selected a mode
+            showMainApp();
+            updateUserInfoDisplay();
+            
+            if (userSelectedMode === 'premium') {
+                window.loadSpotifySDK();
+            }
+        } else {
+            // User is logged in but needs to select mode
+            showWelcomeScreen();
+        }
+    } else {
+        // User not logged in
+        showWelcomeScreen();
     }
-    
-    // 로그인 섹션 숨기기
-    if (spotifyLoginSection) {
-        spotifyLoginSection.classList.add('d-none');
-        spotifyLoginSection.style.display = 'none';
-    }
-    
-    // 사용자 선택 화면 표시
-    if (userTypeSelection) {
-        userTypeSelection.classList.remove('d-none');
-        userTypeSelection.style.display = 'block';
-        userTypeSelection.style.visibility = 'visible';
-    }
-    
-    console.log('User selection forced - ready for selection');
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    // 페이지 로드 시 항상 초기 상태로 리셋
-    console.log('=== PAGE LOADED - CHECKING LOGIN STATUS ===');
+function showWelcomeScreen() {
+    document.getElementById('welcome-screen').classList.remove('d-none');
+    document.getElementById('main-app').classList.add('d-none');
+}
+
+function showMainApp() {
+    document.getElementById('welcome-screen').classList.add('d-none');
+    document.getElementById('main-app').classList.remove('d-none');
+}
+
+// Handle mode selection from welcome screen
+window.selectUserMode = function(mode) {
+    userSelectedMode = mode;
+    localStorage.setItem('selectedUserMode', mode);
     
-    // 전역 변수 초기화
-    userSelectedMode = null;
-    isPremiumUser = false;
-    accessToken = null;
-    currentPlaylist = [];
-    currentPlaylistIndex = -1;
-    currentPlaylistId = null;
+    // Update step indicator
+    document.getElementById('step-indicator').textContent = '2';
     
-    // Assign global player element variables
+    // Hide step 1, show step 2
+    document.getElementById('step-1').classList.add('d-none');
+    document.getElementById('step-2').classList.remove('d-none');
+    
+    // Update selected mode info
+    const modeInfo = document.getElementById('selected-mode-info');
+    if (mode === 'premium') {
+        modeInfo.innerHTML = `
+            <h5><i class="bi bi-music-note-beamed text-success"></i> Premium Experience Selected</h5>
+            <p class="mb-0">You'll get full song playback and advanced features. Requires Spotify Premium account.</p>
+        `;
+    } else {
+        modeInfo.innerHTML = `
+            <h5><i class="bi bi-headphones text-info"></i> Preview Mode Selected</h5>
+            <p class="mb-0">You'll get 30-second previews and basic features. Works with any Spotify account.</p>
+        `;
+    }
+};
+
+window.goBackToStep1 = function() {
+    document.getElementById('step-indicator').textContent = '1';
+    document.getElementById('step-2').classList.add('d-none');
+    document.getElementById('step-1').classList.remove('d-none');
+};
+
+window.logoutUser = function() {
+    if (confirm('Are you sure you want to logout?')) {
+        localStorage.clear();
+        sessionStorage.clear();
+        window.location.href = '/logout';
+    }
+};
+
+// Check if returning from Spotify login
+function checkForLoginReturn() {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('logged_in') === 'true') {
+        // User just logged in, show loading and then main app
+        const welcomeScreen = document.getElementById('welcome-screen');
+        if (!welcomeScreen.classList.contains('d-none')) {
+            document.getElementById('step-indicator').textContent = '3';
+            document.getElementById('step-2').classList.add('d-none');
+            document.getElementById('step-3').classList.remove('d-none');
+            
+            setTimeout(async () => {
+                await checkUserLoginStatus();
+                showMainApp();
+                updateUserInfoDisplay();
+                
+                if (userSelectedMode === 'premium') {
+                    window.loadSpotifySDK();
+                }
+            }, 2000);
+        }
+        
+        // Clean up URL
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+}
+
+// DOM Content Loaded
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log('DOM Content Loaded');
+    
+    // Initialize global variables
+    audioPreview = new Audio();
+    
+    // Get UI elements
     spotifyPlayerBar = document.getElementById('mini-player-bar');
     togglePlayButton = document.getElementById('mini-player-toggle-play');
     previousTrackButton = document.getElementById('mini-player-previous');
     nextTrackButton = document.getElementById('mini-player-next');
     volumeSlider = document.getElementById('mini-player-volume-slider');
     seekSlider = document.getElementById('mini-player-seek-slider');
-    audioPreview = new Audio(); // Initialize audioPreview once
+    
+    // Check for login return first
+    checkForLoginReturn();
+    
+    // Initialize app
+    await initializeApp();
+    
+    // Set up event listeners
+    setupEventListeners();
+});
 
-    // Form and other general elements
-    const form = document.getElementById('recommend-form');
-    const trackInput = document.getElementById('track-name');
-    const artistInput = document.getElementById('artist-name');
-    const resultsContainer = document.getElementById('results');
-    const loader = document.getElementById('loader');
-    const errorMessage = document.getElementById('error-message');
-    const playlistsSection = document.getElementById('playlists-section');
-    const playlistTabs = document.getElementById('playlist-tabs');
-    const recommendationSection = document.getElementById('recommendation-section');
-    const showRecommendationsBtn = document.getElementById('show-recommendations');
-    const showPlaylistsBtn = document.getElementById('show-playlists');
-    const resetBanditButton = document.getElementById('reset-bandit-btn');
-
-    // User type selection buttons
-    const premiumUserBtn = document.getElementById('premium-user-btn');
-    const generalUserBtn = document.getElementById('general-user-btn');
-    const userTypeSelection = document.getElementById('user-type-selection');
-    const appContent = document.getElementById('app-content');
-    const spotifyLoginSection = document.getElementById('spotify-login-section');
-
-    // 먼저 기존 로그인 상태 확인
-    checkUserLoginAndSetup().then(isLoggedIn => {
-        if (isLoggedIn) {
-            console.log('User already logged in - showing app content');
-            // 이미 로그인되어 있으면 바로 앱 사용 가능
-            // 하지만 어떤 모드를 원하는지는 다시 물어볼 수 있음
-            forceUserSelection(); // 사용자 모드 재선택
-        } else {
-            console.log('User not logged in - showing user type selection');
-            forceUserSelection();
-        }
-    });
-
-    // Handle user type selection
-    if (premiumUserBtn) {
-        premiumUserBtn.addEventListener('click', async () => {
-            console.log('=== PREMIUM USER SELECTED ===');
-            userSelectedMode = 'premium';
-            
-            // 사용자 선택 화면 숨기기
-            userTypeSelection.classList.add('d-none');
-            
-            // 이미 로그인되어 있는지 확인
-            const isLoggedIn = await checkUserLoginAndSetup();
-            if (!isLoggedIn) {
-                // 로그인이 필요하면 로그인 섹션 표시
-                spotifyLoginSection.classList.remove('d-none');
-                appContent.classList.remove('d-none');
-            } else {
-                // 이미 로그인되어 있으면 바로 앱 사용
-                if (typeof window.loadSpotifySDK === 'function') {
-                    window.loadSpotifySDK();
-                }
-            }
-        });
-    }
-
-    if (generalUserBtn) {
-        generalUserBtn.addEventListener('click', async () => {
-            console.log('=== GENERAL USER SELECTED ===');
-            userSelectedMode = 'general';
-            
-            // 사용자 선택 화면 숨기기
-            userTypeSelection.classList.add('d-none');
-            
-            // 이미 로그인되어 있는지 확인
-            const isLoggedIn = await checkUserLoginAndSetup();
-            if (!isLoggedIn) {
-                // 로그인이 필요하면 로그인 섹션 표시
-                spotifyLoginSection.classList.remove('d-none');
-                appContent.classList.remove('d-none');
-            } else {
-                // 이미 로그인되어 있으면 바로 앱 사용 (Preview 모드)
-                console.log('General User mode activated with logged-in user');
-            }
-        });
-    }
-
-    // Add event listeners for player controls
+function setupEventListeners() {
+    // Player controls
     if (togglePlayButton) {
         togglePlayButton.addEventListener('click', () => {
-            if (userSelectedMode === 'premium' && isPremiumUser) {
-                if (spotifyPlayer) {
-                    spotifyPlayer.togglePlay();
-                }
-            } else {
+            if (userSelectedMode === 'premium' && currentUser?.product === 'premium' && spotifyPlayer) {
+                spotifyPlayer.togglePlay();
+            } else if (audioPreview) {
                 if (audioPreview.paused) {
                     audioPreview.play();
                     togglePlayButton.innerHTML = '<i class="bi bi-pause-fill"></i>';
@@ -1062,7 +1035,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Navigation between recommendations and playlists
+    // Navigation
+    const showRecommendationsBtn = document.getElementById('show-recommendations');
+    const showPlaylistsBtn = document.getElementById('show-playlists');
+    const recommendationSection = document.getElementById('recommendation-section');
+    const playlistsSection = document.getElementById('playlists-section');
+
     if (showRecommendationsBtn) {
         showRecommendationsBtn.addEventListener('click', (e) => {
             e.preventDefault();
@@ -1080,11 +1058,12 @@ document.addEventListener('DOMContentLoaded', () => {
             playlistsSection.classList.remove('d-none');
             showRecommendationsBtn.classList.remove('active');
             showPlaylistsBtn.classList.add('active');
-            fetchAndDisplayPlaylists(); // Load playlists when showing
+            fetchAndDisplayPlaylists();
         });
     }
 
     // Reset bandit button
+    const resetBanditButton = document.getElementById('reset-bandit-btn');
     if (resetBanditButton) {
         resetBanditButton.addEventListener('click', async () => {
             try {
@@ -1101,12 +1080,14 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    if (recommendationSection) recommendationSection.classList.remove('d-none');
-    if (playlistsSection) playlistsSection.classList.add('d-none');
-    if (showRecommendationsBtn) showRecommendationsBtn.classList.add('active');
-    if (showPlaylistsBtn) showPlaylistsBtn.classList.remove('active');
-
     // Form submission
+    const form = document.getElementById('recommend-form');
+    const trackInput = document.getElementById('track-name');
+    const artistInput = document.getElementById('artist-name');
+    const resultsContainer = document.getElementById('results');
+    const loader = document.getElementById('loader');
+    const errorMessage = document.getElementById('error-message');
+
     if (form) {
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -1159,18 +1140,35 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Volume slider event listener
+    // Volume slider
     if (volumeSlider) {
         volumeSlider.addEventListener('input', (event) => {
             const volume = event.target.value;
-            if (userSelectedMode === 'premium' && isPremiumUser && spotifyPlayer) {
+            if (userSelectedMode === 'premium' && currentUser?.product === 'premium' && spotifyPlayer) {
                 spotifyPlayer.setVolume(volume);
             } else if (audioPreview) {
                 audioPreview.volume = volume;
             }
-            // Update volume progress indicator
             const percentage = volume * 100;
             volumeSlider.style.setProperty('--volume-progress', `${percentage}%`);
         });
     }
-});
+
+    // Mini player close button
+    const closeBtn = document.getElementById('mini-player-close');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            if (spotifyPlayer) {
+                spotifyPlayer.pause();
+            }
+            if (audioPreview) {
+                audioPreview.pause();
+            }
+            const miniPlayerBar = document.getElementById('mini-player-bar');
+            if (miniPlayerBar) {
+                miniPlayerBar.classList.add('d-none');
+            }
+            currentTrackUri = null;
+        });
+    }
+}
