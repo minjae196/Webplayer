@@ -9,9 +9,8 @@ SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
 
 # Render 배포 시 동적으로 URL 설정
 if os.getenv("RENDER"):
-    # Render 환경에서는 RENDER_EXTERNAL_URL 사용
-    base_url = os.getenv("RENDER_EXTERNAL_URL", "https://your-app-name.onrender.com")
-    SPOTIPY_REDIRECT_URI = f"{base_url}/callback"
+    # Render 환경에서는 고정 URL 사용
+    SPOTIPY_REDIRECT_URI = "https://webplayer-gog9.onrender.com/callback"
 else:
     # 로컬 개발 환경
     SPOTIPY_REDIRECT_URI = os.getenv("SPOTIPY_REDIRECT_URI", "http://localhost:8000/callback")
