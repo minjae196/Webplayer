@@ -272,16 +272,16 @@
         </header>
 
         <!-- User Type Selection Section -->
-        <div id="user-type-selection" class="text-center mb-4">
+        <div id="user-type-selection" class="text-center mb-4" style="display: block !important;">
             <p class="lead">How would you like to use the app?</p>
             <button id="premium-user-btn" class="btn btn-success btn-lg me-3">Premium Spotify User (Full Playback)</button>
             <button id="general-user-btn" class="btn btn-info btn-lg">General User (Playlist Export Only)</button>
         </div>
 
         <!-- Main Application Content (initially hidden) -->
-        <div id="app-content" class="d-none">
+        <div id="app-content" class="d-none" style="display: none !important;">
             <!-- Spotify Login Section -->
-            <div id="spotify-login-section" class="text-center mb-4">
+            <div id="spotify-login-section" class="text-center mb-4 d-none" style="display: none !important;">
                 <p>To enable full playback, please log in to Spotify Premium:</p>
                 <a href="/login" class="btn btn-success btn-lg">Login with Spotify</a>
             </div>
