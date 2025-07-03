@@ -271,17 +271,18 @@
             <p class="lead">Enter a song and artist to get similar recommendations.</p>
         </header>
 
-        <!-- User Type Selection Section -->
+        <!-- User Type Selection Section - 항상 표시 -->
         <div id="user-type-selection" class="text-center mb-4">
             <p class="lead">How would you like to use the app?</p>
+            <p class="text-muted small">Please select your preference for every session</p>
             <button id="premium-user-btn" class="btn btn-success btn-lg me-3">Premium Spotify User (Full Playback)</button>
-            <button id="general-user-btn" class="btn btn-info btn-lg">General User (Playlist Export Only)</button>
+            <button id="general-user-btn" class="btn btn-info btn-lg">General User (Preview Only)</button>
         </div>
 
         <!-- Main Application Content (initially hidden) -->
         <div id="app-content" class="d-none">
             <!-- Spotify Login Section -->
-            <div id="spotify-login-section" class="text-center mb-4">
+            <div id="spotify-login-section" class="text-center mb-4 d-none">
                 <p>To enable full playback, please log in to Spotify Premium:</p>
                 <a href="/login" class="btn btn-success btn-lg">Login with Spotify</a>
             </div>
