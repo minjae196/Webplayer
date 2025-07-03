@@ -1,2 +1,0 @@
-Contextual bandit
-multi_stage bandit
