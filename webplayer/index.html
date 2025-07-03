@@ -398,9 +398,19 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <!-- ColorThief for dynamic background -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/color-thief/2.3.0/color-thief.umd.js"></script>
-    <!-- Spotify Web Playback SDK -->
-    <script src="https://sdk.scdn.co/spotify-player.js"></script>
     <!-- Custom JS -->
     <script src="/static/script.js"></script>
+    <!-- Spotify Web Playback SDK - 조건부 로드 -->
+    <script>
+        // Premium 사용자가 선택될 때만 Spotify SDK 로드
+        window.loadSpotifySDK = function() {
+            if (!document.querySelector('script[src*="spotify-player.js"]')) {
+                const script = document.createElement('script');
+                script.src = 'https://sdk.scdn.co/spotify-player.js';
+                document.head.appendChild(script);
+                console.log('Spotify SDK loaded for Premium user');
+            }
+        };
+    </script>
 </body>
 </html>
