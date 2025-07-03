@@ -254,41 +254,156 @@
         body {
             overflow-x: hidden;
         }
+
+        /* Welcome screen styles */
+        .welcome-screen {
+            background: linear-gradient(135deg, #1DB954, #191414);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .welcome-card {
+            background: rgba(40, 40, 40, 0.9);
+            border-radius: 20px;
+            padding: 40px;
+            text-align: center;
+            max-width: 500px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .mode-selection-card {
+            background: rgba(40, 40, 40, 0.95);
+            border-radius: 15px;
+            padding: 30px;
+            margin: 20px 0;
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .mode-selection-card:hover {
+            border-color: #1DB954;
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(29, 185, 84, 0.3);
+        }
+
+        .step-indicator {
+            background: rgba(29, 185, 84, 0.2);
+            border: 2px solid #1DB954;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            font-weight: bold;
+            color: #1DB954;
+        }
+
+        .user-info-display {
+            background: rgba(29, 185, 84, 0.1);
+            border: 1px solid #1DB954;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 15px 0;
+        }
     </style>
 </head>
 <body>
-    <div id="sidebar">
-        <h3 class="text-white mb-4">Music Recommender</h3>
-        <nav class="nav flex-column w-100">
-            <a class="nav-link active" href="#" id="show-recommendations">Recommendations</a>
-            <a class="nav-link" href="#" id="show-playlists">Playlists</a>
-        </nav>
+    <!-- Welcome Screen -->
+    <div id="welcome-screen" class="welcome-screen">
+        <div class="welcome-card">
+            <div class="step-indicator" id="step-indicator">1</div>
+            <h1 class="display-4 mb-4">🎵 Music Recommender</h1>
+            <p class="lead mb-4">Discover new music with AI-powered recommendations</p>
+            
+            <!-- Step 1: User Type Selection -->
+            <div id="step-1" class="step-content">
+                <h3 class="mb-4">Choose Your Experience</h3>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mode-selection-card" onclick="selectUserMode('premium')">
+                            <h4><i class="bi bi-music-note-beamed"></i> Premium Experience</h4>
+                            <p class="text-muted">Full song playback, advanced features</p>
+                            <small class="text-success">Requires Spotify Premium</small>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mode-selection-card" onclick="selectUserMode('general')">
+                            <h4><i class="bi bi-headphones"></i> Preview Mode</h4>
+                            <p class="text-muted">30-second previews, basic features</p>
+                            <small class="text-info">Works with any Spotify account</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 2: Login -->
+            <div id="step-2" class="step-content d-none">
+                <h3 class="mb-4">Connect Your Spotify Account</h3>
+                <p class="mb-4">We need to connect to your Spotify account for personalized recommendations</p>
+                <div id="selected-mode-info" class="user-info-display mb-4">
+                    <!-- Selected mode info will be inserted here -->
+                </div>
+                <a href="/login" class="btn btn-success btn-lg">
+                    <i class="bi bi-spotify"></i> Login with Spotify
+                </a>
+                <br><br>
+                <button class="btn btn-outline-light" onclick="goBackToStep1()">
+                    <i class="bi bi-arrow-left"></i> Change Mode
+                </button>
+            </div>
+
+            <!-- Step 3: Loading -->
+            <div id="step-3" class="step-content d-none">
+                <h3 class="mb-4">Setting Up Your Experience</h3>
+                <div class="spinner-border text-success" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-3">Connecting to Spotify...</p>
+            </div>
+        </div>
     </div>
 
-    <div id="main-content" class="container-fluid">
-        <header class="text-center mb-5">
-            <h1 class="display-4">🎵 Music Recommender</h1>
-            <p class="lead">Enter a song and artist to get similar recommendations.</p>
-        </header>
-
-        <!-- User Type Selection Section - 항상 표시 -->
-        <div id="user-type-selection" class="text-center mb-4">
-            <p class="lead">How would you like to use the app?</p>
-            <p class="text-muted small">Please select your preference for every session</p>
-            <button id="premium-user-btn" class="btn btn-success btn-lg me-3">Premium Spotify User (Full Playback)</button>
-            <button id="general-user-btn" class="btn btn-info btn-lg">General User (Preview Only)</button>
+    <!-- Main App (Hidden initially) -->
+    <div id="main-app" class="d-none">
+        <div id="sidebar">
+            <h3 class="text-white mb-4">Music Recommender</h3>
+            <nav class="nav flex-column w-100">
+                <a class="nav-link active" href="#" id="show-recommendations">Recommendations</a>
+                <a class="nav-link" href="#" id="show-playlists">Playlists</a>
+            </nav>
+            
+            <!-- User Info Panel -->
+            <div class="mt-auto pt-3 border-top border-secondary">
+                <div id="user-info" class="text-center">
+                    <img id="user-avatar" src="" alt="User" class="rounded-circle mb-2" style="width: 50px; height: 50px; display: none;">
+                    <div id="user-name" class="text-white small"></div>
+                    <div id="user-mode" class="text-muted small"></div>
+                    <button class="btn btn-outline-light btn-sm mt-2" onclick="logoutUser()">
+                        <i class="bi bi-box-arrow-right"></i> Logout
+                    </button>
+                </div>
+            </div>
         </div>
 
-        <!-- Main Application Content (initially hidden) -->
-        <div id="app-content" class="d-none">
-            <!-- Spotify Login Section -->
-            <div id="spotify-login-section" class="text-center mb-4 d-none">
-                <p>To enable full playback, please log in to Spotify Premium:</p>
-                <a href="/login" class="btn btn-success btn-lg">Login with Spotify</a>
+        <div id="main-content" class="container-fluid">
+            <!-- User Product Type Info -->
+            <div id="user-product-info" class="alert alert-info d-none mb-4" role="alert">
+                <!-- Product type info will be inserted here -->
             </div>
 
             <!-- Recommendation Section -->
             <div id="recommendation-section">
+                <header class="text-center mb-5">
+                    <h1 class="display-4">🎵 Your Personal DJ</h1>
+                    <p class="lead">Enter a song and artist to get personalized recommendations.</p>
+                </header>
+
                 <!-- Input Form -->
                 <form id="recommend-form" class="row g-3 justify-content-center mb-5">
                     <div class="col-md-4">
@@ -411,6 +526,60 @@
                 console.log('Spotify SDK loaded for Premium user');
             }
         };
+
+        // Welcome screen navigation functions
+        function selectUserMode(mode) {
+            window.selectedUserMode = mode;
+            
+            // Update step indicator
+            document.getElementById('step-indicator').textContent = '2';
+            
+            // Hide step 1, show step 2
+            document.getElementById('step-1').classList.add('d-none');
+            document.getElementById('step-2').classList.remove('d-none');
+            
+            // Update selected mode info
+            const modeInfo = document.getElementById('selected-mode-info');
+            if (mode === 'premium') {
+                modeInfo.innerHTML = `
+                    <h5><i class="bi bi-music-note-beamed text-success"></i> Premium Experience Selected</h5>
+                    <p class="mb-0">You'll get full song playback and advanced features. Requires Spotify Premium account.</p>
+                `;
+            } else {
+                modeInfo.innerHTML = `
+                    <h5><i class="bi bi-headphones text-info"></i> Preview Mode Selected</h5>
+                    <p class="mb-0">You'll get 30-second previews and basic features. Works with any Spotify account.</p>
+                `;
+            }
+        }
+
+        function goBackToStep1() {
+            document.getElementById('step-indicator').textContent = '1';
+            document.getElementById('step-2').classList.add('d-none');
+            document.getElementById('step-1').classList.remove('d-none');
+        }
+
+        function showLoadingStep() {
+            document.getElementById('step-indicator').textContent = '3';
+            document.getElementById('step-2').classList.add('d-none');
+            document.getElementById('step-3').classList.remove('d-none');
+        }
+
+        function showMainApp() {
+            document.getElementById('welcome-screen').classList.add('d-none');
+            document.getElementById('main-app').classList.remove('d-none');
+        }
+
+        function logoutUser() {
+            if (confirm('Are you sure you want to logout?')) {
+                // Clear all stored data
+                localStorage.clear();
+                sessionStorage.clear();
+                
+                // Redirect to logout endpoint or reload page
+                window.location.href = '/logout';
+            }
+        }
     </script>
 </body>
 </html>
