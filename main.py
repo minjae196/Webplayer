@@ -471,3 +471,6 @@ def post_feedback(request: Request, feedback_request: FeedbackRequest):
                 "seed_track_name": feedback_request.seed_track_name,
                 "seed_artist_name": feedback_request.seed_artist_name
             }
+    except Exception as e:
+        print(f"[Backend] Error in post_feedback: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
